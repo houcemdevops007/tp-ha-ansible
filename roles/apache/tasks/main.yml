@@ -1,0 +1,157 @@
+---
+# ==========================================================
+# roles/apache/tasks/main.yml
+# Installation d'Apache httpd + déploiement du site statique
+# ==========================================================
+
+# ----------------------------------------------------------
+# 1. Installation
+# ----------------------------------------------------------
+- name: "apache | Installer Apache httpd"
+  ansible.builtin.package:
+    name: "{{ apache_packages }}"
+    state: present
+  tags: [apache, install]
+
+# Rocky Linux affiche une page de test tant qu'aucun VirtualHost ne répond.
+# On vide welcome.conf plutôt que de supprimer le fichier : une mise à jour
+# du paquet httpd le recréerait, et Ansible le reviderait proprement.
+- name: "apache | Neutraliser la page d'accueil par défaut (Rocky/RHEL)"
+  ansible.builtin.copy:
+    content: "# Neutralisé par Ansible — voir {{ apache_vhost_file }}\n"
+    dest: /etc/httpd/conf.d/welcome.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - ansible_os_family == 'RedHat'
+    - apache_remove_welcome | bool
+  notify: Redémarrer Apache
+  tags: [apache, config]
+
+# ----------------------------------------------------------
+# 2. Déploiement du contenu
+# ----------------------------------------------------------
+- name: "apache | Créer la racine du site {{ apache_docroot }}"
+  ansible.builtin.file:
+    path: "{{ apache_docroot }}"
+    state: directory
+    owner: root
+    group: "{{ apache_group }}"
+    mode: "0755"
+  tags: [apache, deploy]
+
+# style.css est IDENTIQUE sur tous les serveurs : module copy, dossier files/
+- name: "apache | Déployer la feuille de style"
+  ansible.builtin.copy:
+    src: style.css
+    dest: "{{ apache_docroot }}/style.css"
+    owner: root
+    group: "{{ apache_group }}"
+    mode: "0644"
+  tags: [apache, deploy, content]
+
+# Les pages HTML CHANGENT d'un serveur à l'autre (hostname, IP, couleur)
+# : module template, dossier templates/, suffixe .j2
+- name: "apache | Déployer les pages du site"
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ apache_docroot }}/{{ item }}"
+    owner: root
+    group: "{{ apache_group }}"
+    mode: "0644"
+  loop: "{{ apache_pages }}"
+  tags: [apache, deploy, content]
+
+# ----------------------------------------------------------
+# 3. VirtualHost
+# ----------------------------------------------------------
+- name: "apache | Déployer le VirtualHost du site"
+  ansible.builtin.template:
+    src: vhost-lab.conf.j2
+    dest: "{{ apache_vhost_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Redémarrer Apache
+  tags: [apache, config]
+
+- name: "apache | Activer le site (Debian/Ubuntu uniquement)"
+  ansible.builtin.command: "a2ensite lab-site"
+  args:
+    creates: /etc/apache2/sites-enabled/lab-site.conf
+  when: ansible_os_family == 'Debian'
+  notify: Redémarrer Apache
+  tags: [apache, config]
+
+- name: "apache | Désactiver le site par défaut (Debian/Ubuntu uniquement)"
+  ansible.builtin.command: "a2dissite 000-default"
+  args:
+    removes: /etc/apache2/sites-enabled/000-default.conf
+  when: ansible_os_family == 'Debian'
+  notify: Redémarrer Apache
+  tags: [apache, config]
+
+# Vérifie la configuration GLOBALE d'Apache, pas seulement notre fragment.
+# changed_when: false -> c'est une lecture, elle ne modifie rien.
+- name: "apache | Vérifier la syntaxe de la configuration Apache"
+  ansible.builtin.command: "{{ apache_configtest }}"
+  changed_when: false
+  check_mode: false
+  tags: [apache, config]
+
+# ----------------------------------------------------------
+# 4. SELinux : réétiqueter le contenu du site
+# ----------------------------------------------------------
+- name: "apache | Restaurer les contextes SELinux du site"
+  ansible.builtin.command: "restorecon -Rv {{ apache_docroot }}"
+  register: apache_restorecon
+  changed_when: "'Relabeled' in apache_restorecon.stdout"
+  when:
+    - manage_selinux | bool
+    - ansible_os_family == 'RedHat'
+    - selinux_state != 'disabled'
+  tags: [apache, selinux]
+
+# ----------------------------------------------------------
+# 5. Pare-feu
+# ----------------------------------------------------------
+- name: "apache | Ouvrir le port {{ apache_http_port }}/tcp"
+  ansible.posix.firewalld:
+    port: "{{ apache_http_port }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled
+  when:
+    - manage_firewalld | bool
+    - ansible_os_family == 'RedHat'
+  tags: [apache, firewall]
+
+# ----------------------------------------------------------
+# 6. Service
+# ----------------------------------------------------------
+- name: "apache | Activer et démarrer {{ apache_service }}"
+  ansible.builtin.service:
+    name: "{{ apache_service }}"
+    state: started
+    enabled: true
+  tags: [apache, service]
+
+# ----------------------------------------------------------
+# 7. Auto-vérification : la page de santé doit répondre 200
+#    delegate_to: localhost -> le test part du nœud de contrôle
+# ----------------------------------------------------------
+- name: "apache | Vérifier que /health.html répond 200 depuis le nœud de contrôle"
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ apache_http_port }}/health.html"
+    status_code: 200
+    return_content: true
+  register: apache_health
+  retries: 5
+  delay: 2
+  until: apache_health.status == 200
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  tags: [apache, verify]

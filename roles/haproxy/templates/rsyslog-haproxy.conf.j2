@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# Journalisation de HAProxy
+# HAProxy écrit sur le socket /dev/log avec les facilités local0 et local1.
+
+# Journal des requêtes HTTP
+local0.*    {{ haproxy_log_file }}
+
+# Journal d'administration (démarrage, changement d'état des serveurs)
+local1.*    /var/log/haproxy-admin.log
+
+# « & stop » empêche la duplication de ces messages dans /var/log/messages
+& stop

@@ -1,0 +1,23 @@
+---
+# ==========================================================
+# group_vars/web.yml — pool Apache (groupe [web])
+# ==========================================================
+
+# Rocky/RHEL : httpd — Debian/Ubuntu : apache2
+apache_service: httpd
+apache_packages:
+  - httpd
+apache_user: apache
+apache_group: apache
+
+# Racine du site statique déployé par le rôle
+apache_docroot: /var/www/lab-site
+
+# Contenu affiché par le site (injecté dans les templates Jinja2)
+site_title: "Lab Ansible — Site statique Apache"
+site_subtitle: "Pool web_apache derrière HAProxy"
+site_environment: "Formation DevOps"
+
+# Valeurs par défaut, surchargées par hôte dans l'inventaire
+server_badge_color: "#2b6cb0"
+server_badge_label: "WEB"

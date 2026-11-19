@@ -1,0 +1,35 @@
+# {{ ansible_managed }}
+# VirtualHost du site statique du lab
+# Serveur : {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})
+
+{# Ne jamais ajouter « Listen 80 » : httpd.conf le fait déjà.
+   Une directive Listen en double empêche Apache de démarrer. #}
+{% if apache_http_port != 80 %}
+Listen {{ apache_http_port }}
+{% endif %}
+
+<VirtualHost *:{{ apache_http_port }}>
+
+    ServerName   {{ apache_server_name }}
+    ServerAlias  www.{{ lab_domain }} {{ inventory_hostname }}
+    ServerAdmin  root@{{ lab_domain }}
+    DocumentRoot {{ apache_docroot }}
+
+    <Directory "{{ apache_docroot }}">
+        Options -Indexes +FollowSymLinks
+        AllowOverride None
+        Require all granted
+    </Directory>
+
+    # En-tête de diagnostic : « curl -I » montre immédiatement
+    # quel serveur du pool a répondu.
+    Header always set X-Served-By "{{ inventory_hostname }}"
+
+    # Le health check de HAProxy frappe /health.html toutes les 2 secondes.
+    # On l'exclut du journal d'accès, sinon il est illisible.
+    SetEnvIf Request_URI "^/health\.html$" ne_pas_journaliser
+
+    ErrorLog  "logs/lab-site_error.log"
+    CustomLog "logs/lab-site_access.log" combined env=!ne_pas_journaliser
+
+</VirtualHost>

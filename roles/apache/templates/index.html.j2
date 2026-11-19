@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+{# {{ ansible_managed }} — template Jinja2 rendu par Ansible #}
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ site_title }} — {{ server_badge_label }}</title>
+  <link rel="stylesheet" href="/style.css">
+  <!-- Couleur propre à CE serveur, injectée par Ansible -->
+  <style>:root { --couleur-serveur: {{ server_badge_color }}; }</style>
+</head>
+<body>
+
+  <header class="bandeau">
+    <div class="bandeau-contenu">
+      <span class="badge">{{ server_badge_label }}</span>
+      <div>
+        <h1>{{ site_title }}</h1>
+        <p class="sous-titre">{{ site_subtitle }}</p>
+      </div>
+    </div>
+  </header>
+
+  <nav class="menu">
+    <a href="/" class="actif">Accueil</a>
+    <a href="/about.html">À propos</a>
+    <a href="/app/">Application Tomcat</a>
+    <a href="/health.html">Santé</a>
+  </nav>
+
+  <main>
+
+    <section class="carte carte-vedette">
+      <h2>Vous êtes servi par <strong>{{ inventory_hostname }}</strong></h2>
+      <p class="rappel">
+        Rafraîchissez cette page (F5) plusieurs fois : HAProxy répartit les
+        requêtes en <em>roundrobin</em>, la couleur et le nom du serveur
+        doivent changer à chaque fois.
+      </p>
+    </section>
+
+    <section class="grille">
+
+      <div class="carte">
+        <h3>Identité du serveur</h3>
+        <dl>
+          <dt>Nom d'hôte Ansible</dt><dd>{{ inventory_hostname }}</dd>
+          <dt>Nom d'hôte système</dt><dd>{{ ansible_hostname }}</dd>
+          <dt>FQDN</dt><dd>{{ ansible_fqdn }}</dd>
+          <dt>Adresse IP</dt><dd>{{ ansible_default_ipv4.address }}</dd>
+          <dt>Port d'écoute</dt><dd>{{ apache_http_port }}</dd>
+        </dl>
+      </div>
+
+      <div class="carte">
+        <h3>Système</h3>
+        <dl>
+          <dt>Distribution</dt>
+          <dd>{{ ansible_distribution }} {{ ansible_distribution_version }}</dd>
+          <dt>Noyau</dt><dd>{{ ansible_kernel }}</dd>
+          <dt>Processeurs</dt><dd>{{ ansible_processor_vcpus }} vCPU</dd>
+          <dt>Mémoire</dt><dd>{{ ansible_memtotal_mb }} Mo</dd>
+          <dt>Environnement</dt><dd>{{ site_environment }}</dd>
+        </dl>
+      </div>
+
+      <div class="carte">
+        <h3>Pool web_apache</h3>
+        <p>Ce serveur fait partie du pool suivant, déclaré dans l'inventaire&nbsp;:</p>
+        <ul class="liste-serveurs">
+{% for membre in groups['web'] %}
+          <li{% if membre == inventory_hostname %} class="moi"{% endif %}>
+            {{ membre }} — {{ hostvars[membre]['ansible_host'] }}:{{ apache_http_port }}
+{% if membre == inventory_hostname %} <span class="ici">← vous êtes ici</span>{% endif %}
+          </li>
+{% endfor %}
+        </ul>
+      </div>
+
+      <div class="carte">
+        <h3>Déploiement</h3>
+        <dl>
+          <dt>Généré le</dt><dd>{{ ansible_date_time.date }} à {{ ansible_date_time.time }}</dd>
+          <dt>Outil</dt><dd>Ansible (module template)</dd>
+          <dt>Racine du site</dt><dd>{{ apache_docroot }}</dd>
+        </dl>
+        <p class="note">
+          Ce fichier est généré&nbsp;: toute modification manuelle sera
+          écrasée au prochain déploiement.
+        </p>
+      </div>
+
+    </section>
+
+    <section class="carte encart">
+      <h3>Important&nbsp;: aucun lien avec Tomcat</h3>
+      <p>
+        Ce serveur Apache ne communique <strong>pas</strong> avec les serveurs
+        Tomcat. Il n'y a ni <code>mod_proxy</code>, ni connecteur
+        <code>AJP</code>. Le lien « Application Tomcat » du menu pointe vers
+        <code>/app/</code>&nbsp;: c'est <strong>HAProxy</strong>, et lui seul,
+        qui redirigera cette requête vers le pool
+        <code>app_tomcat</code>.
+      </p>
+    </section>
+
+  </main>
+
+  <footer>
+    Servi par {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})
+    — {{ site_environment }}
+  </footer>
+
+</body>
+</html>

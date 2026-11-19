@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# Fichier généré par Ansible — toute modification manuelle sera écrasée.
+
+{% for serveur in ntp_servers %}
+server {{ serveur }} iburst
+{% endfor %}
+
+# Fichier d'historique de dérive de l'horloge
+driftfile /var/lib/chrony/drift
+
+# Autorise un saut d'horloge si l'écart dépasse 1 s lors des 3 premières mises à jour
+makestep 1.0 3
+
+# Synchronise l'horloge matérielle (RTC) avec l'horloge système
+rtcsync
+
+logdir /var/log/chrony

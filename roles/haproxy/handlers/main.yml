@@ -1,0 +1,22 @@
+---
+# ==========================================================
+# roles/haproxy/handlers/main.yml
+# ==========================================================
+
+# reload et non restart : HAProxy démarre un nouveau processus avec
+# la nouvelle configuration, et laisse l'ancien terminer les connexions
+# en cours avant de s'arrêter. Aucune requête n'est perdue.
+- name: Recharger HAProxy
+  ansible.builtin.service:
+    name: "{{ haproxy_service }}"
+    state: reloaded
+
+- name: Redémarrer HAProxy
+  ansible.builtin.service:
+    name: "{{ haproxy_service }}"
+    state: restarted
+
+- name: Redémarrer rsyslog
+  ansible.builtin.service:
+    name: rsyslog
+    state: restarted

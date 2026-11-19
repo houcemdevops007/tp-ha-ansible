@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+127.0.0.1   localhost localhost.localdomain localhost4
+::1         localhost localhost.localdomain localhost6
+
+# ----------------------------------------------------------
+# Machines du lab — généré depuis l'inventaire Ansible
+# ----------------------------------------------------------
+{% for hote in groups['lab'] | sort %}
+{{ "%-16s" | format(hostvars[hote]['ansible_host']) }}{{ hote }}.{{ lab_domain }}   {{ hote }}
+{% endfor %}
+
+# ----------------------------------------------------------
+# Noms de service : les deux pointent vers HAProxy, c'est lui
+# qui fera la différence grâce à l'en-tête Host.
+# ----------------------------------------------------------
+{% for lb in groups['lb'] %}
+{{ "%-16s" | format(hostvars[lb]['ansible_host']) }}www.{{ lab_domain }}   app.{{ lab_domain }}
+{% endfor %}

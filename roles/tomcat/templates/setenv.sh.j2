@@ -1,0 +1,18 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# Fichier sourcé automatiquement par catalina.sh au démarrage de Tomcat.
+# Machine : {{ inventory_hostname }}
+
+# Options de la machine virtuelle Java
+CATALINA_OPTS="{{ tomcat_java_opts }}"
+
+# Identifie la machine dans les logs applicatifs et les pages JSP
+CATALINA_OPTS="$CATALINA_OPTS -Dlab.server.name={{ inventory_hostname }}"
+CATALINA_OPTS="$CATALINA_OPTS -Dlab.server.ip={{ ansible_default_ipv4.address }}"
+
+# Encodage : évite les accents cassés dans les JSP
+CATALINA_OPTS="$CATALINA_OPTS -Dfile.encoding=UTF-8"
+
+JAVA_HOME="{{ tomcat_java_home }}"
+
+export CATALINA_OPTS JAVA_HOME

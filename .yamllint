@@ -1,0 +1,31 @@
+---
+# ==========================================================
+# .yamllint — règles de mise en forme YAML
+#
+# Ces quatre réglages ne sont pas des préférences : ansible-lint
+# les exige pour rester compatible avec ses propres règles.
+# Les modifier déclenche un avertissement et désactive son mode --fix.
+# ==========================================================
+extends: default
+
+rules:
+  comments-indentation: false
+  braces:
+    max-spaces-inside: 1
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
+
+  # Réglages propres au projet
+  line-length:
+    max: 180
+    level: warning
+  truthy:
+    allowed-values: ['true', 'false']
+  comments:
+    min-spaces-from-content: 1
+
+ignore: |
+  .cache/
+  .git/
+  exercices/

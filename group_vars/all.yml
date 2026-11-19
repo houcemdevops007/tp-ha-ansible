@@ -1,0 +1,39 @@
+---
+# ==========================================================
+# group_vars/all.yml
+# Variables partagées par TOUS les hôtes du lab
+# ==========================================================
+
+lab_domain: "lab.local"
+
+# --- Rôle common ---
+lab_timezone: "Europe/Paris"
+ntp_servers:
+  - 0.rocky.pool.ntp.org
+  - 1.rocky.pool.ntp.org
+
+common_packages:
+  - vim
+  - curl
+  - wget
+  - tar
+  - bash-completion
+  - chrony
+  - firewalld
+  - policycoreutils-python-utils   # fournit semanage (SELinux)
+
+# Interrupteurs pratiques pour le dépannage :
+# passez-les à false pour écarter firewalld ou SELinux d'un diagnostic
+manage_firewalld: true
+manage_selinux: true
+selinux_state: enforcing
+
+# --- Ports de l'architecture (référencés par TOUS les rôles) ---
+apache_http_port: 80
+tomcat_http_port: 8080
+haproxy_http_port: 80
+haproxy_stats_port: 8404
+
+# --- Préfixe d'URL routé vers Tomcat (contexte de l'application) ---
+# /app  -> backend app_tomcat
+app_context: "app"

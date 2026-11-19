@@ -1,0 +1,47 @@
+---
+# ==========================================================
+# group_vars/lb.yml — HAProxy (groupe [lb])
+# ==========================================================
+
+haproxy_packages:
+  - haproxy
+haproxy_config_file: /etc/haproxy/haproxy.cfg
+
+# --- Nommage des sections (repris tel quel dans haproxy.cfg) ---
+haproxy_frontend_name: ft_http
+haproxy_backend_web: web_apache
+haproxy_backend_app: app_tomcat
+
+# --- Répartition ---
+haproxy_balance_algorithm: roundrobin      # leastconn, source, uri...
+
+# --- Mode de routage : "path" (défaut) ou "host" ---
+# path : /app*            -> app_tomcat, le reste -> web_apache
+# host : app.lab.local    -> app_tomcat, www.lab.local -> web_apache
+haproxy_routing_mode: path
+haproxy_web_hostname: "www.{{ lab_domain }}"
+haproxy_app_hostname: "app.{{ lab_domain }}"
+
+# --- Health checks ---
+haproxy_web_check_uri: "/health.html"
+haproxy_app_check_uri: "/{{ app_context }}/health.jsp"
+haproxy_check_inter: 2000                  # intervalle en ms
+haproxy_check_rise: 2                      # succès avant de remonter UP
+haproxy_check_fall: 3                      # échecs avant de passer DOWN
+
+# --- Page de statistiques (port 8404) ---
+haproxy_stats_enabled: true
+haproxy_stats_uri: /stats
+haproxy_stats_refresh: 5s
+haproxy_stats_user: admin
+# ATTENTION : ce mot de passe sera déplacé dans ansible-vault (partie 5)
+haproxy_stats_password: "ChangeMe-Lab2026"
+
+# --- Sticky sessions sur le backend Tomcat (exercice niveau 3) ---
+haproxy_app_sticky: false
+haproxy_app_cookie_name: SRVID
+
+# --- Timeouts ---
+haproxy_timeout_connect: "5s"
+haproxy_timeout_client: "30s"
+haproxy_timeout_server: "30s"

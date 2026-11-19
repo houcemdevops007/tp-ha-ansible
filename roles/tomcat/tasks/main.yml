@@ -1,0 +1,289 @@
+---
+# ==========================================================
+# roles/tomcat/tasks/main.yml
+# Java + Tomcat 9 + déploiement de l'application /app
+# ==========================================================
+
+# ----------------------------------------------------------
+# 1. Java
+# ----------------------------------------------------------
+- name: "tomcat | Installer Java ({{ java_package }})"
+  ansible.builtin.package:
+    name: "{{ java_package }}"
+    state: present
+  tags: [tomcat, install, java]
+
+# JAVA_HOME n'est pas le même d'une distribution à l'autre :
+# on le déduit du lien symbolique réel de /usr/bin/java.
+- name: "tomcat | Localiser le binaire java réel"
+  ansible.builtin.command: "readlink -f /usr/bin/java"
+  register: tomcat_java_bin
+  changed_when: false
+  check_mode: false
+  tags: [tomcat, install, java]
+
+- name: "tomcat | Déduire JAVA_HOME"
+  ansible.builtin.set_fact:
+    tomcat_java_home: "{{ tomcat_java_bin.stdout | regex_replace('/bin/java$', '') }}"
+  tags: [tomcat, install, java]
+
+- name: "tomcat | Afficher JAVA_HOME (information)"
+  ansible.builtin.debug:
+    var: tomcat_java_home
+  tags: [tomcat, install, java]
+
+# ----------------------------------------------------------
+# 2. Utilisateur de service
+#    Tomcat ne doit JAMAIS tourner en root.
+# ----------------------------------------------------------
+- name: "tomcat | Créer le groupe {{ tomcat_group }}"
+  ansible.builtin.group:
+    name: "{{ tomcat_group }}"
+    system: true
+    state: present
+  tags: [tomcat, install]
+
+- name: "tomcat | Créer l'utilisateur système {{ tomcat_user }}"
+  ansible.builtin.user:
+    name: "{{ tomcat_user }}"
+    group: "{{ tomcat_group }}"
+    home: "{{ tomcat_home }}"
+    shell: /sbin/nologin        # aucune connexion interactive possible
+    system: true
+    create_home: false
+    state: present
+  tags: [tomcat, install]
+
+# ----------------------------------------------------------
+# 3. Téléchargement et installation de l'archive Tomcat
+# ----------------------------------------------------------
+- name: "tomcat | Télécharger Tomcat {{ tomcat_version }}"
+  ansible.builtin.get_url:
+    url: "{{ tomcat_url }}"
+    dest: "/tmp/{{ tomcat_archive }}"
+    mode: "0644"
+    timeout: 60
+  tags: [tomcat, install]
+
+# « creates » rend la tâche idempotente : si le dossier existe déjà,
+# l'archive n'est pas redéployée et la tâche est « ok », pas « changed ».
+- name: "tomcat | Extraire l'archive dans {{ tomcat_install_dir }}"
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ tomcat_archive }}"
+    dest: "{{ tomcat_base_dir }}"
+    remote_src: true            # l'archive est DÉJÀ sur la machine cible
+    owner: "{{ tomcat_user }}"
+    group: "{{ tomcat_group }}"
+    creates: "{{ tomcat_install_dir }}/bin/catalina.sh"
+  tags: [tomcat, install]
+
+# Le lien symbolique permet de changer de version sans toucher
+# ni au service systemd, ni aux chemins de déploiement.
+- name: "tomcat | Créer le lien symbolique {{ tomcat_home }}"
+  ansible.builtin.file:
+    src: "{{ tomcat_install_dir }}"
+    dest: "{{ tomcat_home }}"
+    state: link
+    owner: "{{ tomcat_user }}"
+    group: "{{ tomcat_group }}"
+  notify: Redémarrer Tomcat
+  tags: [tomcat, install]
+
+- name: "tomcat | Rendre les scripts bin/*.sh exécutables"
+  ansible.builtin.file:
+    path: "{{ tomcat_install_dir }}/bin"
+    state: directory
+    mode: "0750"
+    owner: "{{ tomcat_user }}"
+    group: "{{ tomcat_group }}"
+    recurse: true
+  tags: [tomcat, install]
+
+- name: "tomcat | Supprimer les applications d'exemple livrées avec Tomcat"
+  ansible.builtin.file:
+    path: "{{ tomcat_home }}/webapps/{{ item }}"
+    state: absent
+  loop: "{{ tomcat_remove_default_apps }}"
+  tags: [tomcat, install, security]
+
+# ----------------------------------------------------------
+# 4. Configuration
+# ----------------------------------------------------------
+- name: "tomcat | Déployer bin/setenv.sh (options de la JVM)"
+  ansible.builtin.template:
+    src: setenv.sh.j2
+    dest: "{{ tomcat_home }}/bin/setenv.sh"
+    owner: "{{ tomcat_user }}"
+    group: "{{ tomcat_group }}"
+    mode: "0750"
+  notify: Redémarrer Tomcat
+  tags: [tomcat, config]
+
+# Ajuste le port du connecteur HTTP dans server.xml.
+# Le module « replace » est idempotent : une fois le port changé,
+# l'expression régulière ne correspond plus à rien.
+- name: "tomcat | Régler le port du connecteur HTTP sur {{ tomcat_http_port }}"
+  ansible.builtin.replace:
+    path: "{{ tomcat_home }}/conf/server.xml"
+    regexp: '(<Connector\s+port=")8080(")'
+    replace: '\g<1>{{ tomcat_http_port }}\g<2>'
+  when: tomcat_http_port != 8080
+  notify: Redémarrer Tomcat
+  tags: [tomcat, config]
+
+- name: "tomcat | Restreindre le port d'arrêt à la boucle locale"
+  ansible.builtin.replace:
+    path: "{{ tomcat_home }}/conf/server.xml"
+    regexp: '<Server port="8005" shutdown="SHUTDOWN">'
+    replace: '<Server port="{{ tomcat_shutdown_port }}" address="127.0.0.1" shutdown="SHUTDOWN">'
+  notify: Redémarrer Tomcat
+  tags: [tomcat, config, security]
+
+- name: "tomcat | Déployer l'unité systemd"
+  ansible.builtin.template:
+    src: tomcat.service.j2
+    dest: /etc/systemd/system/tomcat.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Recharger systemd
+    - Redémarrer Tomcat
+  tags: [tomcat, config, service]
+
+# ----------------------------------------------------------
+# 5. Déploiement de l'application /app
+# ----------------------------------------------------------
+- name: "tomcat | Créer l'arborescence de l'application {{ tomcat_app_name }}"
+  ansible.builtin.file:
+    path: "{{ tomcat_home }}/webapps/{{ tomcat_app_name }}/WEB-INF"
+    state: directory
+    owner: "{{ tomcat_user }}"
+    group: "{{ tomcat_group }}"
+    mode: "0750"
+  when: not (tomcat_package_as_war | bool)
+  tags: [tomcat, deploy, content]
+
+# Fichiers IDENTIQUES sur tous les serveurs : health.jsp et web.xml.
+# Le « / » final de src copie le CONTENU du dossier files/app/.
+- name: "tomcat | Déployer les fichiers statiques de l'application"
+  ansible.builtin.copy:
+    src: "app/"
+    dest: "{{ tomcat_home }}/webapps/{{ tomcat_app_name }}/"
+    owner: "{{ tomcat_user }}"
+    group: "{{ tomcat_group }}"
+    mode: "0640"
+    directory_mode: "0750"
+  when: not (tomcat_package_as_war | bool)
+  notify: Redémarrer Tomcat
+  tags: [tomcat, deploy, content]
+
+# Fichier PERSONNALISÉ par serveur (hostname, couleur, liste du pool)
+- name: "tomcat | Déployer index.jsp"
+  ansible.builtin.template:
+    src: index.jsp.j2
+    dest: "{{ tomcat_home }}/webapps/{{ tomcat_app_name }}/index.jsp"
+    owner: "{{ tomcat_user }}"
+    group: "{{ tomcat_group }}"
+    mode: "0640"
+  when: not (tomcat_package_as_war | bool)
+  tags: [tomcat, deploy, content]
+
+# ----------------------------------------------------------
+# 6. Variante : packager l'application en .war
+#    Activée par tomcat_package_as_war: true
+# ----------------------------------------------------------
+- name: "tomcat | Construction du .war"
+  when: tomcat_package_as_war | bool
+  tags: [tomcat, deploy, war]
+  block:
+
+    - name: "tomcat | Créer le répertoire de construction"
+      ansible.builtin.file:
+        path: "/tmp/build-{{ tomcat_app_name }}/WEB-INF"
+        state: directory
+        mode: "0755"
+
+    - name: "tomcat | Copier les fichiers statiques dans le répertoire de construction"
+      ansible.builtin.copy:
+        src: "app/"
+        dest: "/tmp/build-{{ tomcat_app_name }}/"
+        mode: "0644"
+        directory_mode: "0755"
+
+    - name: "tomcat | Générer index.jsp dans le répertoire de construction"
+      ansible.builtin.template:
+        src: index.jsp.j2
+        dest: "/tmp/build-{{ tomcat_app_name }}/index.jsp"
+        mode: "0644"
+      register: tomcat_war_source
+
+    # Un .war est une archive ZIP : la commande « jar » du JDK la produit.
+    # -C change de répertoire avant d'ajouter « . », pour que les chemins
+    # dans l'archive soient relatifs à la racine de l'application.
+    - name: "tomcat | Construire {{ tomcat_app_name }}.war avec la commande jar"
+      ansible.builtin.command:
+        cmd: "jar -cf /tmp/{{ tomcat_app_name }}.war -C /tmp/build-{{ tomcat_app_name }} ."
+      changed_when: true
+
+    - name: "tomcat | Déployer le .war dans webapps/"
+      ansible.builtin.copy:
+        src: "/tmp/{{ tomcat_app_name }}.war"
+        dest: "{{ tomcat_home }}/webapps/{{ tomcat_app_name }}.war"
+        remote_src: true
+        owner: "{{ tomcat_user }}"
+        group: "{{ tomcat_group }}"
+        mode: "0640"
+      notify: Redémarrer Tomcat
+
+# ----------------------------------------------------------
+# 7. SELinux, pare-feu, service
+# ----------------------------------------------------------
+- name: "tomcat | Restaurer les contextes SELinux de {{ tomcat_install_dir }}"
+  ansible.builtin.command: "restorecon -Rv {{ tomcat_install_dir }}"
+  register: tomcat_restorecon
+  changed_when: "'Relabeled' in tomcat_restorecon.stdout"
+  when:
+    - manage_selinux | bool
+    - ansible_os_family == 'RedHat'
+    - selinux_state != 'disabled'
+  tags: [tomcat, selinux]
+
+- name: "tomcat | Ouvrir le port {{ tomcat_http_port }}/tcp"
+  ansible.posix.firewalld:
+    port: "{{ tomcat_http_port }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled
+  when:
+    - manage_firewalld | bool
+    - ansible_os_family == 'RedHat'
+  tags: [tomcat, firewall]
+
+- name: "tomcat | Activer et démarrer le service tomcat"
+  ansible.builtin.systemd:
+    name: tomcat
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: [tomcat, service]
+
+# ----------------------------------------------------------
+# 8. Auto-vérification
+#    Le premier appel compile la JSP : on laisse du temps et on réessaie.
+# ----------------------------------------------------------
+- name: "tomcat | Vérifier que /{{ tomcat_app_name }}/health.jsp répond 200"
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ tomcat_http_port }}/{{ tomcat_app_name }}/health.jsp"
+    status_code: 200
+    return_content: true
+  register: tomcat_health
+  retries: 15
+  delay: 4
+  until:
+    - tomcat_health.status is defined
+    - tomcat_health.status == 200
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  tags: [tomcat, verify]

@@ -1,0 +1,14 @@
+---
+# ==========================================================
+# roles/apache/handlers/main.yml
+# ==========================================================
+
+- name: Redémarrer Apache
+  ansible.builtin.service:
+    name: "{{ apache_service }}"
+    state: restarted
+
+- name: Recharger Apache
+  ansible.builtin.service:
+    name: "{{ apache_service }}"
+    state: reloaded

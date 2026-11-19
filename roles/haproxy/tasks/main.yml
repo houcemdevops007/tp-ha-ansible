@@ -1,0 +1,164 @@
+---
+# ==========================================================
+# roles/haproxy/tasks/main.yml
+# Installation et configuration du load balancer
+# ==========================================================
+
+- name: "haproxy | Installer HAProxy"
+  ansible.builtin.package:
+    name: "{{ haproxy_packages }}"
+    state: present
+  tags: [haproxy, install]
+
+- name: "haproxy | Relever la version installée"
+  ansible.builtin.command: "haproxy -v"
+  register: haproxy_version_out
+  changed_when: false
+  check_mode: false
+  tags: [haproxy, install]
+
+- name: "haproxy | Afficher la version (information)"
+  ansible.builtin.debug:
+    msg: "{{ haproxy_version_out.stdout_lines | first }}"
+  tags: [haproxy, install]
+
+# ----------------------------------------------------------
+# SELinux : deux problèmes DISTINCTS à régler
+# ----------------------------------------------------------
+
+# 1) Se CONNECTER aux backends sur des ports non standard (8080).
+#    Sans ce booléen, HAProxy démarre mais tous les backends
+#    restent DOWN, et /var/log/audit/audit.log se remplit d'AVC denied.
+- name: "haproxy | Autoriser HAProxy à se connecter à tout port (SELinux)"
+  ansible.posix.seboolean:
+    name: haproxy_connect_any
+    state: true
+    persistent: true
+  when:
+    - manage_selinux | bool
+    - ansible_os_family == 'RedHat'
+    - selinux_state != 'disabled'
+  tags: [haproxy, selinux]
+
+# 2) ÉCOUTER sur le port 8404, inconnu de la politique SELinux.
+- name: "haproxy | Déclarer le port {{ haproxy_stats_port }} comme port HTTP (SELinux)"
+  community.general.seport:
+    ports: "{{ haproxy_stats_port }}"
+    proto: tcp
+    setype: http_port_t
+    state: present
+  when:
+    - manage_selinux | bool
+    - ansible_os_family == 'RedHat'
+    - selinux_state != 'disabled'
+    - haproxy_stats_enabled | bool
+  tags: [haproxy, selinux]
+
+# ----------------------------------------------------------
+# Journalisation : HAProxy envoie ses logs sur le socket /dev/log
+# via les facilités syslog local0 et local1.
+# ----------------------------------------------------------
+- name: "haproxy | Configurer rsyslog pour HAProxy"
+  ansible.builtin.template:
+    src: rsyslog-haproxy.conf.j2
+    dest: /etc/rsyslog.d/49-haproxy.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: haproxy_manage_rsyslog | bool
+  notify: Redémarrer rsyslog
+  tags: [haproxy, logs]
+
+# ----------------------------------------------------------
+# LA tâche centrale du tutoriel
+# ----------------------------------------------------------
+- name: "haproxy | Générer haproxy.cfg depuis l'inventaire"
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: "{{ haproxy_config_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+    backup: true
+    # Ansible écrit d'abord un fichier TEMPORAIRE, exécute la commande
+    # ci-dessous en remplaçant %s par son chemin, et ne met le fichier
+    # en place QUE si la commande retourne 0.
+    # Une erreur de syntaxe ne peut donc JAMAIS casser le load balancer.
+    validate: "haproxy -c -f %s"
+  notify: Recharger HAProxy
+  tags: [haproxy, config]
+
+# ----------------------------------------------------------
+# Pare-feu
+# ----------------------------------------------------------
+- name: "haproxy | Ouvrir le port {{ haproxy_http_port }}/tcp"
+  ansible.posix.firewalld:
+    port: "{{ haproxy_http_port }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled
+  when:
+    - manage_firewalld | bool
+    - ansible_os_family == 'RedHat'
+  tags: [haproxy, firewall]
+
+- name: "haproxy | Ouvrir le port des statistiques {{ haproxy_stats_port }}/tcp"
+  ansible.posix.firewalld:
+    port: "{{ haproxy_stats_port }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled
+  when:
+    - manage_firewalld | bool
+    - ansible_os_family == 'RedHat'
+    - haproxy_stats_enabled | bool
+  tags: [haproxy, firewall]
+
+# ----------------------------------------------------------
+# Service
+# ----------------------------------------------------------
+- name: "haproxy | Activer et démarrer HAProxy"
+  ansible.builtin.service:
+    name: "{{ haproxy_service }}"
+    state: started
+    enabled: true
+  tags: [haproxy, service]
+
+# ----------------------------------------------------------
+# Auto-vérification de bout en bout
+# ----------------------------------------------------------
+- name: "haproxy | Vérifier que / est servi par le pool Apache"
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ haproxy_http_port }}/"
+    status_code: 200
+    return_content: true
+  register: haproxy_test_web
+  retries: 10
+  delay: 3
+  until: haproxy_test_web.status | default(0) == 200
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  tags: [haproxy, verify]
+
+- name: "haproxy | Vérifier que /{{ app_context }}/ est servi par le pool Tomcat"
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ haproxy_http_port }}/{{ app_context }}/"
+    status_code: 200
+    return_content: true
+  register: haproxy_test_app
+  retries: 10
+  delay: 3
+  until: haproxy_test_app.status | default(0) == 200
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  tags: [haproxy, verify]
+
+- name: "haproxy | Récapitulatif du routage"
+  ansible.builtin.debug:
+    msg:
+      - "http://{{ ansible_host }}/            -> backend {{ haproxy_backend_web }} (Apache)"
+      - "http://{{ ansible_host }}/{{ app_context }}/  -> backend {{ haproxy_backend_app }} (Tomcat)"
+      - "http://{{ ansible_host }}:{{ haproxy_stats_port }}{{ haproxy_stats_uri }} -> statistiques"
+  tags: [haproxy, verify]

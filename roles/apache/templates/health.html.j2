@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+{# {{ ansible_managed }}
+   Page interrogée par le health check HAProxy :
+     option httpchk GET /health.html
+   Elle doit rester minimale et ne dépendre d'AUCUNE autre ressource. #}
+<html lang="fr">
+<head><meta charset="utf-8"><title>OK</title></head>
+<body>OK {{ inventory_hostname }}</body>
+</html>

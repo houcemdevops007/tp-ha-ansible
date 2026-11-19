@@ -1,0 +1,4 @@
+---
+# host_vars/web1.yml — surcharge propre à la machine web1
+server_badge_color: "#1d7a46"
+server_badge_label: "WEB-1"

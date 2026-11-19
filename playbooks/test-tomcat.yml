@@ -1,0 +1,7 @@
+---
+- name: Test du pool Tomcat
+  hosts: app
+  become: true
+  roles:
+    - common
+    - tomcat

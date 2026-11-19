@@ -1,0 +1,177 @@
+# {{ ansible_managed }}
+# ==========================================================================
+#  Configuration HAProxy du lab — générée par Ansible
+#  Machine        : {{ inventory_hostname }} ({{ ansible_host }})
+#  Mode de routage: {{ haproxy_routing_mode }}
+#  Backends       : {{ haproxy_backend_web }} ({{ groups['web'] | length }} serveurs)
+#                   {{ haproxy_backend_app }} ({{ groups['app'] | length }} serveurs)
+#  NE PAS MODIFIER À LA MAIN — relancez le rôle haproxy.
+# ==========================================================================
+
+#---------------------------------------------------------------------
+# Paramètres globaux du processus
+#---------------------------------------------------------------------
+global
+    log         /dev/log local0
+    log         /dev/log local1 notice
+    chroot      /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    maxconn     {{ haproxy_maxconn }}
+    user        haproxy
+    group       haproxy
+    daemon
+
+    # Socket d'administration (lecture de l'état, bascule de serveurs)
+    stats socket /var/lib/haproxy/stats mode 660 level admin
+
+    ssl-default-bind-ciphers PROFILE=SYSTEM
+    ssl-default-bind-options ssl-min-ver TLSv1.2
+
+#---------------------------------------------------------------------
+# Valeurs par défaut héritées par toutes les sections suivantes
+#---------------------------------------------------------------------
+defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option                  dontlognull
+
+    # Transmet l'IP réelle du client aux backends dans X-Forwarded-For
+    option                  forwardfor       except 127.0.0.0/8
+
+    # Relance une requête sur un autre serveur si la connexion échoue
+    option                  redispatch
+    retries                 3
+
+    timeout connect         {{ haproxy_timeout_connect }}
+    timeout client          {{ haproxy_timeout_client }}
+    timeout server          {{ haproxy_timeout_server }}
+    timeout http-request    10s
+    timeout http-keep-alive 10s
+    timeout check           5s
+    timeout queue           1m
+
+    # Pages d'erreur par défaut fournies par le paquet
+    errorfile 400 /usr/share/haproxy/400.http
+    errorfile 403 /usr/share/haproxy/403.http
+    errorfile 408 /usr/share/haproxy/408.http
+    errorfile 500 /usr/share/haproxy/500.http
+    errorfile 502 /usr/share/haproxy/502.http
+    errorfile 503 /usr/share/haproxy/503.http
+    errorfile 504 /usr/share/haproxy/504.http
+
+#---------------------------------------------------------------------
+# FRONTEND : le point d'entrée unique
+#---------------------------------------------------------------------
+frontend {{ haproxy_frontend_name }}
+
+    bind *:{{ haproxy_http_port }}
+
+    # Informations utiles aux applications derrière le load balancer
+    http-request set-header X-Forwarded-Proto http
+    http-request set-header X-Forwarded-Port  %[dst_port]
+
+    # URL interne de supervision du load balancer lui-même
+    monitor-uri /haproxy-ping
+
+{% if haproxy_routing_mode == 'host' %}
+    # ------------------------------------------------------------------
+    # Routage par NOM D'HÔTE (en-tête Host de la requête)
+    #   {{ haproxy_app_hostname }} -> {{ haproxy_backend_app }}
+    #   {{ haproxy_web_hostname }} -> {{ haproxy_backend_web }}
+    # ------------------------------------------------------------------
+    acl hote_app  hdr(host) -i {{ haproxy_app_hostname }}
+    acl hote_app  hdr(host) -i {{ haproxy_app_hostname }}:{{ haproxy_http_port }}
+    acl hote_web  hdr(host) -i {{ haproxy_web_hostname }}
+    acl hote_web  hdr(host) -i {{ haproxy_web_hostname }}:{{ haproxy_http_port }}
+
+    use_backend {{ haproxy_backend_app }} if hote_app
+    use_backend {{ haproxy_backend_web }} if hote_web
+{% else %}
+    # ------------------------------------------------------------------
+    # Routage par CHEMIN D'URL
+    #   /{{ app_context }} et /{{ app_context }}/*  -> {{ haproxy_backend_app }}
+    #   tout le reste                               -> {{ haproxy_backend_web }}
+    #
+    # Deux lignes portant le MÊME nom d'ACL sont combinées par un OU.
+    # On évite ainsi d'attraper /application ou /appareil, ce que ferait
+    # un simple « path_beg /{{ app_context }} » utilisé seul.
+    # ------------------------------------------------------------------
+    acl est_app  path     /{{ app_context }}
+    acl est_app  path_beg /{{ app_context }}/
+
+    use_backend {{ haproxy_backend_app }} if est_app
+{% endif %}
+
+    # Tout ce qui n'a pas été attrapé par une ACL part ici
+    default_backend {{ haproxy_backend_web }}
+
+#---------------------------------------------------------------------
+# BACKEND 1 : serveurs Apache — site statique
+# Généré par boucle sur groups['web']
+#---------------------------------------------------------------------
+backend {{ haproxy_backend_web }}
+
+    balance {{ haproxy_balance_algorithm }}
+
+    # Health check : HAProxy demande {{ haproxy_web_check_uri }} et attend un 200
+    option httpchk GET {{ haproxy_web_check_uri }}
+    http-check expect status 200
+
+    # En-tête de diagnostic : indique quel BACKEND a traité la requête
+    http-response set-header X-Backend {{ haproxy_backend_web }}
+
+{% for hote in groups['web'] | sort %}
+    server {{ "%-6s" | format(hote) }} {{ hostvars[hote]['ansible_host'] }}:{{ apache_http_port }} check inter {{ haproxy_check_inter }} rise {{ haproxy_check_rise }} fall {{ haproxy_check_fall }}
+{% endfor %}
+
+#---------------------------------------------------------------------
+# BACKEND 2 : serveurs Tomcat — application Java
+# Généré par boucle sur groups['app']
+# AUCUNE relation avec le backend ci-dessus.
+#---------------------------------------------------------------------
+backend {{ haproxy_backend_app }}
+
+    balance {{ haproxy_balance_algorithm }}
+
+    option httpchk GET {{ haproxy_app_check_uri }}
+    http-check expect status 200
+
+    http-response set-header X-Backend {{ haproxy_backend_app }}
+
+{% if haproxy_app_sticky %}
+    # Persistance de session : HAProxy ajoute son propre cookie {{ haproxy_app_cookie_name }}
+    #   insert   : HAProxy crée le cookie lui-même
+    #   indirect : il le retire avant de transmettre au serveur
+    #   nocache  : empêche un proxy intermédiaire de le mettre en cache
+    #   httponly : inaccessible au JavaScript
+    cookie {{ haproxy_app_cookie_name }} insert indirect nocache httponly
+{% endif %}
+
+{% for hote in groups['app'] | sort %}
+    server {{ "%-6s" | format(hote) }} {{ hostvars[hote]['ansible_host'] }}:{{ tomcat_http_port }} check inter {{ haproxy_check_inter }} rise {{ haproxy_check_rise }} fall {{ haproxy_check_fall }}{% if haproxy_app_sticky %} cookie {{ hote }}{% endif %}
+
+{% endfor %}
+
+{% if haproxy_stats_enabled %}
+#---------------------------------------------------------------------
+# Page de statistiques — port {{ haproxy_stats_port }}, protégée par login
+#---------------------------------------------------------------------
+listen stats
+
+    bind *:{{ haproxy_stats_port }}
+
+    stats enable
+    stats uri     {{ haproxy_stats_uri }}
+    stats refresh {{ haproxy_stats_refresh }}
+    stats realm   HAProxy\ Statistiques\ du\ lab
+    stats auth    {{ haproxy_stats_user }}:{{ haproxy_stats_password }}
+    stats show-legends
+    stats show-node
+{% if haproxy_stats_admin %}
+
+    # Autorise l'activation/désactivation d'un serveur depuis l'interface.
+    # Pratique en lab pour simuler une panne ; à retirer en production.
+    stats admin if TRUE
+{% endif %}
+{% endif %}

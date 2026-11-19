@@ -1,0 +1,4 @@
+---
+# host_vars/web2.yml — surcharge propre à la machine web2
+server_badge_color: "#b5651d"
+server_badge_label: "WEB-2"

@@ -1,0 +1,41 @@
+---
+# ==========================================================
+# roles/apache/defaults/main.yml
+# ==========================================================
+
+# --- Paquets et service (Rocky/RHEL par défaut) ---
+apache_packages:
+  - httpd
+apache_service: httpd            # Debian/Ubuntu : apache2
+apache_user: apache              # Debian/Ubuntu : www-data
+apache_group: apache             # Debian/Ubuntu : www-data
+
+# --- Emplacements ---
+apache_docroot: /var/www/lab-site
+apache_vhost_file: /etc/httpd/conf.d/lab-site.conf
+# Debian/Ubuntu : /etc/apache2/sites-available/lab-site.conf
+
+# --- Réseau ---
+apache_http_port: 80
+apache_server_name: "{{ inventory_hostname }}.{{ lab_domain | default('lab.local') }}"
+
+# Commande de test de configuration selon l'OS
+apache_configtest: "{{ 'httpd -t' if ansible_os_family == 'RedHat' else 'apache2ctl configtest' }}"
+
+# --- Contenu du site (injecté dans les templates Jinja2) ---
+site_title: "Lab Ansible — Site statique Apache"
+site_subtitle: "Pool web_apache derrière HAProxy"
+site_environment: "Formation DevOps"
+
+# Identité visuelle du serveur — surchargée par hôte dans l'inventaire
+server_badge_color: "#2b6cb0"
+server_badge_label: "WEB"
+
+# Neutraliser la page « Testing 123 » de Rocky Linux
+apache_remove_welcome: true
+
+# Liste des pages déployées par template
+apache_pages:
+  - index.html
+  - about.html
+  - health.html

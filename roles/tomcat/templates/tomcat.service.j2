@@ -1,0 +1,45 @@
+# {{ ansible_managed }}
+# Unité systemd pour Apache Tomcat {{ tomcat_version }}
+# Machine : {{ inventory_hostname }}
+
+[Unit]
+Description=Apache Tomcat {{ tomcat_version }} — pool app_tomcat
+Documentation=https://tomcat.apache.org/
+After=network.target
+Wants=network-online.target
+
+[Service]
+# Les scripts startup.sh / shutdown.sh lancent un processus en arrière-plan
+# et rendent la main : c'est la définition de Type=forking.
+Type=forking
+
+User={{ tomcat_user }}
+Group={{ tomcat_group }}
+
+Environment="JAVA_HOME={{ tomcat_java_home }}"
+Environment="CATALINA_HOME={{ tomcat_home }}"
+Environment="CATALINA_BASE={{ tomcat_home }}"
+Environment="CATALINA_PID={{ tomcat_home }}/temp/tomcat.pid"
+
+# Indispensable avec Type=forking : systemd doit savoir quel processus suivre
+PIDFile={{ tomcat_home }}/temp/tomcat.pid
+
+ExecStart={{ tomcat_home }}/bin/startup.sh
+ExecStop={{ tomcat_home }}/bin/shutdown.sh
+
+# Redémarrage automatique si la JVM meurt (OutOfMemory, etc.)
+Restart=on-failure
+RestartSec=10
+
+# Laisse à Tomcat le temps de démarrer et de s'arrêter proprement
+TimeoutStartSec=120
+TimeoutStopSec=60
+
+UMask=0007
+
+# --- Durcissement léger ---
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

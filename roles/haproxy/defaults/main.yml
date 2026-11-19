@@ -1,0 +1,55 @@
+---
+# ==========================================================
+# roles/haproxy/defaults/main.yml
+# ==========================================================
+
+haproxy_packages:
+  - haproxy
+haproxy_service: haproxy
+haproxy_config_file: /etc/haproxy/haproxy.cfg
+
+# --- Nommage des sections (repris tel quel dans haproxy.cfg) ---
+haproxy_frontend_name: ft_http
+haproxy_backend_web: web_apache
+haproxy_backend_app: app_tomcat
+
+# --- Ports ---
+haproxy_http_port: 80
+haproxy_stats_port: 8404
+
+# --- Répartition : roundrobin, leastconn, source, uri... ---
+haproxy_balance_algorithm: roundrobin
+
+# --- Mode de routage : "path" (défaut) ou "host" ---
+haproxy_routing_mode: path
+haproxy_web_hostname: "www.{{ lab_domain }}"
+haproxy_app_hostname: "app.{{ lab_domain }}"
+
+# --- Health checks ---
+haproxy_web_check_uri: "/health.html"
+haproxy_app_check_uri: "/{{ app_context }}/health.jsp"
+haproxy_check_inter: 2000       # intervalle entre deux checks, en ms
+haproxy_check_rise: 2           # succès consécutifs avant de repasser UP
+haproxy_check_fall: 3           # échecs consécutifs avant de passer DOWN
+
+# --- Timeouts ---
+haproxy_timeout_connect: "5s"
+haproxy_timeout_client: "30s"
+haproxy_timeout_server: "30s"
+haproxy_maxconn: 4000
+
+# --- Page de statistiques ---
+haproxy_stats_enabled: true
+haproxy_stats_uri: "/stats"
+haproxy_stats_refresh: "5s"
+haproxy_stats_user: "admin"
+haproxy_stats_password: "ChangeMe-Lab2026"   # à déplacer dans le vault (partie 5)
+haproxy_stats_admin: true       # autorise activer/désactiver un serveur depuis l'IHM
+
+# --- Persistance de session sur le backend Tomcat (exercice niveau 3) ---
+haproxy_app_sticky: false
+haproxy_app_cookie_name: "SRVID"
+
+# --- Journalisation ---
+haproxy_manage_rsyslog: true
+haproxy_log_file: /var/log/haproxy.log

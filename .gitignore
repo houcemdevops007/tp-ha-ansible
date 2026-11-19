@@ -1,0 +1,15 @@
+# Secrets — JAMAIS dans le dépôt
+.vault_pass
+
+# Artefacts d'exécution
+*.retry
+*.log
+.cache/
+__pycache__/
+
+# Sauvegardes créées par « backup: true »
+*.bak
+*@*~
+
+# Cache local d'ansible-lint / ansible-galaxy
+.ansible/

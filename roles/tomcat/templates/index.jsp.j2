@@ -1,0 +1,237 @@
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+<%@ page import="java.net.InetAddress" %>
+<%@ page import="java.time.LocalDateTime" %>
+<%@ page import="java.time.format.DateTimeFormatter" %>
+<%--
+  {{ ansible_managed }}
+  Template Jinja2 rendu par Ansible pour {{ inventory_hostname }}.
+  Les {{ ... }} sont remplacés AU DÉPLOIEMENT par Ansible ;
+  les <% ... %> sont exécutés À CHAQUE REQUÊTE par Tomcat.
+--%>
+<%
+    // ---- Compteur de visites conservé dans la session HTTP ----
+    Integer compteur = (Integer) session.getAttribute("compteur");
+    compteur = (compteur == null) ? 1 : compteur + 1;
+    session.setAttribute("compteur", compteur);
+
+    // ---- Nom réel de la machine vu par la JVM ----
+    String hostname;
+    try {
+        hostname = InetAddress.getLocalHost().getHostName();
+    } catch (Exception e) {
+        hostname = "indisponible";
+    }
+
+    // ---- Nom injecté par Ansible via setenv.sh (-Dlab.server.name) ----
+    String nomAnsible = System.getProperty("lab.server.name", "non défini");
+    String ipAnsible  = System.getProperty("lab.server.ip",   "non définie");
+
+    String heure = LocalDateTime.now()
+            .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
+
+    boolean premiereVisite = (compteur == 1);
+%>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ tomcat_app_title }} — {{ server_badge_label }}</title>
+  <style>
+    /* Application autonome : aucun CSS externe, aucun CDN.
+       La page doit s'afficher correctement même si on l'appelle
+       directement sur le port {{ tomcat_http_port }}, sans HAProxy. */
+    :root { --couleur-serveur: {{ server_badge_color }}; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:#f4f6f8; color:#1f2933;
+           font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+           line-height:1.6; }
+    .bandeau { background:var(--couleur-serveur); color:#fff; padding:28px 20px;
+               border-bottom:6px solid rgba(0,0,0,.25); }
+    .bandeau-contenu { max-width:1000px; margin:0 auto; display:flex;
+                       align-items:center; gap:20px; flex-wrap:wrap; }
+    .bandeau h1 { margin:0; font-size:1.55rem; }
+    .sous-titre { margin:4px 0 0; opacity:.85; font-size:.95rem; }
+    .badge { padding:10px 18px; border:3px solid rgba(255,255,255,.85);
+             border-radius:10px; font-size:1.3rem; font-weight:700;
+             letter-spacing:1.5px; background:rgba(0,0,0,.18); }
+    .menu { background:#fff; border-bottom:1px solid #dbe2ea; padding:0 20px; }
+    .menu a { display:inline-block; padding:14px 18px; color:#627d98;
+              text-decoration:none; font-weight:600; font-size:.95rem;
+              border-bottom:3px solid transparent; }
+    .menu a.actif { color:var(--couleur-serveur);
+                    border-bottom-color:var(--couleur-serveur); }
+    main { max-width:1000px; margin:0 auto; padding:26px 20px 60px; }
+    .carte { background:#fff; border:1px solid #dbe2ea; border-radius:10px;
+             padding:20px 24px; margin-bottom:20px; }
+    .carte h3 { margin-top:0; font-size:1rem; color:var(--couleur-serveur);
+                text-transform:uppercase; letter-spacing:.6px; }
+    .grille { display:grid; gap:20px;
+              grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); }
+    .grille .carte { margin-bottom:0; }
+    dl { margin:0; display:grid; grid-template-columns:auto 1fr;
+         gap:6px 16px; font-size:.93rem; }
+    dt { color:#627d98; }
+    dd { margin:0; font-weight:600; word-break:break-all;
+         font-family:Consolas,"Liberation Mono",monospace; }
+    .compteur { font-size:3.4rem; font-weight:800; line-height:1;
+                color:var(--couleur-serveur); }
+    .compteur-bloc { text-align:center; border-left:6px solid var(--couleur-serveur); }
+    .alerte { background:#fff8e6; border-color:#f0d9a0; }
+    .alerte h3 { color:#a06800; }
+    .liste-serveurs { list-style:none; padding:0; margin:0;
+                      font-family:Consolas,"Liberation Mono",monospace;
+                      font-size:.9rem; }
+    .liste-serveurs li { padding:8px 12px; border:1px solid #dbe2ea;
+                         border-radius:6px; margin-bottom:8px; background:#f4f6f8; }
+    .liste-serveurs li.moi { border-color:var(--couleur-serveur);
+                             border-left-width:4px; background:#fff; font-weight:700; }
+    code { background:#eef2f6; border:1px solid #dbe2ea; border-radius:4px;
+           padding:1px 5px; font-size:.88em;
+           font-family:Consolas,"Liberation Mono",monospace; }
+    footer { border-top:1px solid #dbe2ea; background:#fff; color:#627d98;
+             text-align:center; padding:18px 20px; font-size:.86rem; }
+  </style>
+</head>
+<body>
+
+  <header class="bandeau">
+    <div class="bandeau-contenu">
+      <span class="badge">{{ server_badge_label }}</span>
+      <div>
+        <h1>{{ tomcat_app_title }}</h1>
+        <p class="sous-titre">{{ tomcat_app_subtitle }}</p>
+      </div>
+    </div>
+  </header>
+
+  <nav class="menu">
+    <a href="/">Site Apache</a>
+    <a href="/about.html">À propos</a>
+    <a href="/{{ tomcat_app_name }}/" class="actif">Application Java</a>
+    <a href="/{{ tomcat_app_name }}/health.jsp">Santé</a>
+  </nav>
+
+  <main>
+
+    <div class="grille">
+
+      <div class="carte compteur-bloc">
+        <h3>Visites dans cette session</h3>
+        <div class="compteur"><%= compteur %></div>
+        <p>
+          <% if (premiereVisite) { %>
+            Nouvelle session créée sur <strong><%= nomAnsible %></strong>.
+          <% } else { %>
+            Vous êtes revenu <%= compteur %> fois sur
+            <strong><%= nomAnsible %></strong>.
+          <% } %>
+        </p>
+      </div>
+
+      <div class="carte">
+        <h3>Serveur Tomcat</h3>
+        <dl>
+          <dt>Nom (Ansible)</dt><dd><%= nomAnsible %></dd>
+          <dt>Nom (JVM)</dt><dd><%= hostname %></dd>
+          <dt>Adresse IP</dt><dd><%= ipAnsible %></dd>
+          <dt>Port</dt><dd><%= request.getServerPort() %></dd>
+          <dt>Contexte</dt><dd><%= request.getContextPath() %></dd>
+        </dl>
+      </div>
+
+      <div class="carte">
+        <h3>Session HTTP</h3>
+        <dl>
+          <dt>Identifiant</dt><dd><%= session.getId() %></dd>
+          <dt>Nouvelle&nbsp;?</dt><dd><%= session.isNew() ? "oui" : "non" %></dd>
+          <dt>Heure du serveur</dt><dd><%= heure %></dd>
+          <dt>Méthode</dt><dd><%= request.getMethod() %></dd>
+          <dt>Client vu</dt><dd><%= request.getRemoteAddr() %></dd>
+        </dl>
+      </div>
+
+      <div class="carte">
+        <h3>Plateforme Java</h3>
+        <dl>
+          <dt>Serveur</dt>
+          <dd><%= application.getServerInfo() %></dd>
+          <dt>Version Java</dt>
+          <dd><%= System.getProperty("java.version") %></dd>
+          <dt>Servlet</dt>
+          <dd><%= application.getMajorVersion() %>.<%= application.getMinorVersion() %></dd>
+        </dl>
+      </div>
+
+      <div class="carte">
+        <h3>Pool app_tomcat</h3>
+        <ul class="liste-serveurs">
+{% for membre in groups['app'] %}
+          <li{% if membre == inventory_hostname %} class="moi"{% endif %}>
+            {{ membre }} — {{ hostvars[membre]['ansible_host'] }}:{{ tomcat_http_port }}
+          </li>
+{% endfor %}
+        </ul>
+      </div>
+
+      <div class="carte">
+        <h3>Déploiement</h3>
+        <dl>
+          <dt>Déployé le</dt>
+          <dd>{{ ansible_date_time.date }} {{ ansible_date_time.time }}</dd>
+          <dt>Par</dt><dd>Ansible — rôle tomcat</dd>
+          <dt>Tomcat</dt><dd>{{ tomcat_version }}</dd>
+          <dt>Mode</dt>
+          <dd>{{ 'archive .war' if tomcat_package_as_war else 'dossier webapps/' }}</dd>
+        </dl>
+      </div>
+
+    </div>
+
+    <section class="carte alerte">
+      <h3>Rafraîchissez cette page plusieurs fois</h3>
+      <p>
+        Le compteur ci-dessus est stocké dans la <strong>session HTTP</strong>,
+        c'est-à-dire dans la mémoire du serveur Tomcat qui vous a répondu.
+        Comme HAProxy répartit en <code>roundrobin</code> et que les deux
+        serveurs Tomcat ne partagent pas leurs sessions, vous allez voir le
+        compteur <strong>repartir à 1 une requête sur deux</strong> et
+        l'identifiant de session changer.
+      </p>
+      <p>
+        Ce n'est pas un bug&nbsp;: c'est le comportement normal d'une
+        application avec état derrière un répartiteur sans affinité.
+        L'exercice de niveau&nbsp;3 consiste précisément à corriger cela
+        en activant un <em>cookie de persistance</em> sur le backend
+        <code>app_tomcat</code>.
+      </p>
+    </section>
+
+    <section class="carte">
+      <h3>Aucune relation avec Apache</h3>
+      <p>
+        Cette page est servie par Tomcat sur le port {{ tomcat_http_port }}.
+        Aucun serveur Apache n'intervient, ni en amont, ni en aval&nbsp;:
+        pas de <code>mod_proxy</code>, pas de connecteur <code>AJP</code>.
+        Si vous êtes arrivé ici par l'URL <code>/{{ tomcat_app_name }}/</code>,
+        c'est <strong>HAProxy</strong> qui a lu le chemin de votre requête et
+        choisi le backend <code>app_tomcat</code>.
+      </p>
+      <p>
+        Le lien «&nbsp;Site Apache&nbsp;» du menu pointe vers <code>/</code>&nbsp;:
+        en passant par HAProxy, il vous renverra vers le pool
+        <code>web_apache</code>. En accès direct sur le port
+        {{ tomcat_http_port }}, il ne mènera nulle part — ce qui prouve bien
+        que c'est le load balancer qui fait le lien, et lui seul.
+      </p>
+    </section>
+
+  </main>
+
+  <footer>
+    <%= nomAnsible %> (<%= ipAnsible %>) — {{ site_environment }} —
+    page générée le <%= heure %>
+  </footer>
+
+</body>
+</html>

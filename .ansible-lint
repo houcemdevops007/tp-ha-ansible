@@ -1,0 +1,34 @@
+---
+# ==========================================================
+# .ansible-lint — configuration de l'analyseur
+# ==========================================================
+
+# basic < moderate < safety < shared < production
+profile: production
+
+exclude_paths:
+  - .cache/
+  - .git/
+  - exercices/
+  - playbooks/test-apache.yml      # playbooks de test de la formation
+  - playbooks/test-tomcat.yml
+
+skip_list:
+  # Nos noms de tâches sont préfixés par le rôle en minuscules
+  # (« apache | Installer... ») : c'est un choix de lisibilité assumé.
+  - name[casing]
+
+  # Les noms de tâches intègrent une variable au milieu
+  # (« Ouvrir le port {{ apache_http_port }}/tcp ») : à l'exécution,
+  # c'est bien plus parlant qu'un nom générique en fin de ligne.
+  - name[template]
+
+  # Certaines variables sont VOLONTAIREMENT partagées entre rôles :
+  # haproxy.cfg.j2 lit apache_http_port et tomcat_http_port,
+  # les pages HTML et JSP lisent lab_domain et site_environment.
+  # Les préfixer par rôle (common_lab_domain...) casserait la mise
+  # en commun qui fait tout l'intérêt de group_vars/all.yml.
+  - var-naming[no-role-prefix]
+
+warn_list:
+  - experimental

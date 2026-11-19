@@ -1,0 +1,232 @@
+/* ==========================================================
+   style.css — feuille de style du site statique du lab
+   Déployée telle quelle par Ansible (module copy).
+   HTML/CSS pur : aucun framework, aucun CDN, aucune police externe.
+   ========================================================== */
+
+:root {
+  /* Valeur de repli : chaque page redéfinit --couleur-serveur
+     avec la couleur propre au serveur qui l'a générée. */
+  --couleur-serveur: #2b6cb0;
+  --fond:            #f4f6f8;
+  --fond-carte:      #ffffff;
+  --texte:           #1f2933;
+  --texte-doux:      #627d98;
+  --bordure:         #dbe2ea;
+  --rayon:           10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.6;
+}
+
+/* ----------------------------- Bandeau ----------------------------- */
+
+.bandeau {
+  background: var(--couleur-serveur);
+  color: #fff;
+  padding: 28px 20px;
+  border-bottom: 6px solid rgba(0, 0, 0, 0.25);
+}
+
+.bandeau-contenu {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.bandeau h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 650;
+}
+
+.sous-titre {
+  margin: 4px 0 0;
+  opacity: 0.85;
+  font-size: 0.95rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 10px 18px;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: var(--rayon);
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  background: rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+}
+
+/* ------------------------------ Menu ------------------------------- */
+
+.menu {
+  background: var(--fond-carte);
+  border-bottom: 1px solid var(--bordure);
+  padding: 0 20px;
+}
+
+.menu a {
+  display: inline-block;
+  padding: 14px 18px;
+  color: var(--texte-doux);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-bottom: 3px solid transparent;
+}
+
+.menu a:hover { color: var(--couleur-serveur); }
+
+.menu a.actif {
+  color: var(--couleur-serveur);
+  border-bottom-color: var(--couleur-serveur);
+}
+
+/* ---------------------------- Contenu ------------------------------ */
+
+main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 26px 20px 60px;
+}
+
+.carte {
+  background: var(--fond-carte);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+
+.carte h2 { margin-top: 0; font-size: 1.25rem; }
+
+.carte h3 {
+  margin-top: 0;
+  font-size: 1.02rem;
+  color: var(--couleur-serveur);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.carte-vedette {
+  border-left: 6px solid var(--couleur-serveur);
+}
+
+.carte-vedette h2 strong { color: var(--couleur-serveur); }
+
+.rappel {
+  margin-bottom: 0;
+  color: var(--texte-doux);
+}
+
+.grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 20px;
+}
+
+.grille .carte { margin-bottom: 0; }
+
+/* ------------------------ Listes de données ------------------------ */
+
+dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  font-size: 0.93rem;
+}
+
+dt { color: var(--texte-doux); }
+
+dd {
+  margin: 0;
+  font-weight: 600;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  word-break: break-all;
+}
+
+.liste-serveurs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+}
+
+.liste-serveurs li {
+  padding: 8px 12px;
+  border: 1px solid var(--bordure);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: var(--fond);
+}
+
+.liste-serveurs li.moi {
+  border-color: var(--couleur-serveur);
+  border-left-width: 4px;
+  background: var(--fond-carte);
+  font-weight: 700;
+}
+
+.ici {
+  color: var(--couleur-serveur);
+  font-weight: 700;
+}
+
+.etapes { padding-left: 22px; margin: 0; }
+.etapes li { margin-bottom: 8px; }
+
+/* ----------------------------- Encarts ----------------------------- */
+
+.encart {
+  background: #fff8e6;
+  border-color: #f0d9a0;
+}
+
+.encart h3 { color: #a06800; }
+
+.note {
+  color: var(--texte-doux);
+  font-size: 0.85rem;
+  margin-bottom: 0;
+}
+
+code {
+  background: #eef2f6;
+  border: 1px solid var(--bordure);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.88em;
+}
+
+/* ----------------------------- Pied -------------------------------- */
+
+footer {
+  border-top: 1px solid var(--bordure);
+  background: var(--fond-carte);
+  color: var(--texte-doux);
+  text-align: center;
+  padding: 18px 20px;
+  font-size: 0.86rem;
+}
+
+/* --------------------------- Mobile -------------------------------- */
+
+@media (max-width: 560px) {
+  .bandeau-contenu { flex-direction: column; align-items: flex-start; }
+  dl { grid-template-columns: 1fr; }
+  dt { margin-top: 6px; }
+}

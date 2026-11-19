@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Descripteur de déploiement de l'application /app
+  Déployé tel quel par Ansible (module copy).
+
+  ATTENTION : espace de noms javax (Java EE 8 / Servlet 4.0) => Tomcat 9.
+  Pour Tomcat 10 ou plus, il faudrait passer à :
+    xmlns="https://jakarta.ee/xml/ns/jakartaee"  et  version="5.0"
+-->
+<web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
+                             http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+         version="4.0">
+
+    <display-name>Lab Ansible - Application Java</display-name>
+    <description>
+        Application de démonstration du pool app_tomcat.
+        Aucune dépendance externe : ni Maven, ni base de données,
+        ni bibliothèque tierce. Uniquement des pages JSP compilées
+        par Tomcat au premier appel.
+    </description>
+
+    <!-- Page servie quand l'URL se termine par /app/ -->
+    <welcome-file-list>
+        <welcome-file>index.jsp</welcome-file>
+    </welcome-file-list>
+
+    <!-- Gestion des sessions : c'est ce qui alimente le compteur de visites -->
+    <session-config>
+        <!-- en minutes -->
+        <session-timeout>30</session-timeout>
+        <cookie-config>
+            <name>JSESSIONID</name>
+            <!-- Le cookie n'est pas lisible en JavaScript -->
+            <http-only>true</http-only>
+            <!-- À passer à true le jour où HAProxy fera du HTTPS -->
+            <secure>false</secure>
+        </cookie-config>
+        <!-- Pas de ;jsessionid= dans les URL : uniquement le cookie -->
+        <tracking-mode>COOKIE</tracking-mode>
+    </session-config>
+
+    <!-- Pages d'erreur : évite d'exposer les traces Java aux visiteurs -->
+    <error-page>
+        <error-code>404</error-code>
+        <location>/erreur.jsp</location>
+    </error-page>
+    <error-page>
+        <error-code>500</error-code>
+        <location>/erreur.jsp</location>
+    </error-page>
+
+</web-app>

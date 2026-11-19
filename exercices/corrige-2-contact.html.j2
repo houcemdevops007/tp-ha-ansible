@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+{# {{ ansible_managed }} #}
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contact — {{ site_title }}</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>:root { --couleur-serveur: {{ server_badge_color }}; }</style>
+</head>
+<body>
+
+  <header class="bandeau">
+    <div class="bandeau-contenu">
+      <span class="badge">{{ server_badge_label }}</span>
+      <div>
+        <h1>Nous contacter</h1>
+        <p class="sous-titre">{{ site_subtitle }}</p>
+      </div>
+    </div>
+  </header>
+
+  <nav class="menu">
+    <a href="/">Accueil</a>
+    <a href="/about.html">À propos</a>
+    <a href="/contact.html" class="actif">Contact</a>
+    <a href="/app/">Application Tomcat</a>
+  </nav>
+
+  <main>
+    <section class="carte">
+      <h2>Équipe d'exploitation</h2>
+      <dl>
+        <dt>Formation</dt><dd>{{ site_environment }}</dd>
+        <dt>Courriel</dt><dd>exploitation@{{ lab_domain }}</dd>
+        <dt>Astreinte</dt><dd>+33 (0)1 23 45 67 89</dd>
+      </dl>
+    </section>
+
+    <section class="carte carte-vedette">
+      <h3>Serveur ayant traité votre demande</h3>
+      <dl>
+        <dt>Nom</dt><dd>{{ inventory_hostname }}</dd>
+        <dt>Adresse IP</dt><dd>{{ ansible_default_ipv4.address }}</dd>
+        <dt>Page générée le</dt>
+        <dd>{{ ansible_date_time.date }} à {{ ansible_date_time.time }}</dd>
+      </dl>
+    </section>
+  </main>
+
+  <footer>
+    Servi par {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})
+    — {{ site_environment }}
+  </footer>
+
+</body>
+</html>

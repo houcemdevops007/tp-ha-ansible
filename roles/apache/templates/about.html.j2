@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+{# {{ ansible_managed }} #}
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>À propos — {{ site_title }}</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>:root { --couleur-serveur: {{ server_badge_color }}; }</style>
+</head>
+<body>
+
+  <header class="bandeau">
+    <div class="bandeau-contenu">
+      <span class="badge">{{ server_badge_label }}</span>
+      <div>
+        <h1>À propos de ce lab</h1>
+        <p class="sous-titre">Architecture HAProxy à deux backends indépendants</p>
+      </div>
+    </div>
+  </header>
+
+  <nav class="menu">
+    <a href="/">Accueil</a>
+    <a href="/about.html" class="actif">À propos</a>
+    <a href="/app/">Application Tomcat</a>
+    <a href="/health.html">Santé</a>
+  </nav>
+
+  <main>
+
+    <section class="carte">
+      <h2>Le chemin d'une requête</h2>
+      <ol class="etapes">
+        <li>Le navigateur contacte <strong>HAProxy</strong> sur le port 80.</li>
+        <li>HAProxy examine le chemin de l'URL demandée.</li>
+        <li>
+          Si le chemin commence par <code>/{{ app_context }}</code>, la requête
+          part vers le backend <code>app_tomcat</code> (port {{ tomcat_http_port }}).
+        </li>
+        <li>
+          Sinon, elle part vers le backend <code>web_apache</code>
+          (port {{ apache_http_port }}) — c'est le backend par défaut,
+          et c'est ce qui s'est passé pour cette page.
+        </li>
+        <li>Le serveur choisi répond&nbsp;; HAProxy relaie la réponse au client.</li>
+      </ol>
+    </section>
+
+    <section class="grille">
+
+      <div class="carte">
+        <h3>Backend <code>web_apache</code></h3>
+        <ul class="liste-serveurs">
+{% for membre in groups['web'] %}
+          <li{% if membre == inventory_hostname %} class="moi"{% endif %}>
+            {{ membre }} — {{ hostvars[membre]['ansible_host'] }}:{{ apache_http_port }}
+          </li>
+{% endfor %}
+        </ul>
+        <p class="note">Health check&nbsp;: <code>GET /health.html</code></p>
+      </div>
+
+      <div class="carte">
+        <h3>Backend <code>app_tomcat</code></h3>
+        <ul class="liste-serveurs">
+{% for membre in groups['app'] %}
+          <li>
+            {{ membre }} — {{ hostvars[membre]['ansible_host'] }}:{{ tomcat_http_port }}
+          </li>
+{% endfor %}
+        </ul>
+        <p class="note">
+          Health check&nbsp;: <code>GET /{{ app_context }}/health.jsp</code>
+        </p>
+      </div>
+
+    </section>
+
+    <section class="carte encart">
+      <h3>Deux pools, zéro couplage</h3>
+      <p>
+        Les deux listes ci-dessus sont lues <strong>dans le même inventaire
+        Ansible</strong>, mais les machines qu'elles décrivent ne se parlent
+        jamais. Un serveur Apache peut tomber sans qu'aucune page de
+        l'application Java ne soit affectée, et réciproquement. Le seul point
+        commun des deux pools est le load balancer qui se trouve devant.
+      </p>
+    </section>
+
+    <section class="carte">
+      <h3>Technologies utilisées</h3>
+      <dl>
+        <dt>Automatisation</dt><dd>Ansible (rôles common, apache, tomcat, haproxy)</dd>
+        <dt>Répartition de charge</dt><dd>HAProxy — algorithme roundrobin</dd>
+        <dt>Serveur web</dt><dd>Apache httpd — HTML/CSS pur, sans framework</dd>
+        <dt>Serveur d'applications</dt><dd>Apache Tomcat — pages JSP</dd>
+        <dt>Système</dt>
+        <dd>{{ ansible_distribution }} {{ ansible_distribution_version }}</dd>
+      </dl>
+    </section>
+
+  </main>
+
+  <footer>
+    Servi par {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})
+    — {{ site_environment }}
+  </footer>
+
+</body>
+</html>

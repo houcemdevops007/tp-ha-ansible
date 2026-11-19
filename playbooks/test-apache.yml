@@ -1,0 +1,8 @@
+---
+# Playbook de test : seulement common + apache sur le groupe web
+- name: Test du pool Apache
+  hosts: web
+  become: true
+  roles:
+    - common
+    - apache

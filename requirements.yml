@@ -1,0 +1,13 @@
+---
+# ==========================================================
+# requirements.yml — collections Ansible requises par le projet
+# Installation : ansible-galaxy collection install -r requirements.yml
+# ==========================================================
+collections:
+  # firewalld, selinux, seboolean, synchronize
+  - name: ansible.posix
+    version: ">=1.5.0"
+
+  # timezone, et de nombreux modules utilitaires
+  - name: community.general
+    version: ">=8.0.0"

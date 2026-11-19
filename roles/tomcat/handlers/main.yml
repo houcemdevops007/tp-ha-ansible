@@ -1,0 +1,14 @@
+---
+# ==========================================================
+# roles/tomcat/handlers/main.yml
+# ==========================================================
+
+- name: Recharger systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Redémarrer Tomcat
+  ansible.builtin.systemd:
+    name: tomcat
+    state: restarted
+    daemon_reload: true

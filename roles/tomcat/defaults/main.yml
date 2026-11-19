@@ -1,0 +1,53 @@
+---
+# ==========================================================
+# roles/tomcat/defaults/main.yml
+# ==========================================================
+
+# --- Java ---
+# La commande « jar » n'existe que dans le paquet -devel : on ne l'installe
+# que si l'on a choisi de packager l'application en .war.
+java_package: >-
+  {{ 'java-17-openjdk-devel'
+     if (tomcat_package_as_war | default(false) | bool)
+     else 'java-17-openjdk-headless' }}
+# Debian/Ubuntu : openjdk-17-jdk-headless / openjdk-17-jre-headless
+
+# --- Tomcat ---
+tomcat_version: "9.0.89"
+tomcat_download_base: "https://archive.apache.org/dist/tomcat"
+tomcat_user: tomcat
+tomcat_group: tomcat
+tomcat_base_dir: /opt
+tomcat_home: /opt/tomcat                      # lien symbolique
+tomcat_install_dir: "{{ tomcat_base_dir }}/apache-tomcat-{{ tomcat_version }}"
+tomcat_archive: "apache-tomcat-{{ tomcat_version }}.tar.gz"
+tomcat_url: >-
+  {{ tomcat_download_base }}/tomcat-{{ tomcat_version.split('.')[0] }}/v{{ tomcat_version }}/bin/{{ tomcat_archive }}
+
+# --- Réseau ---
+tomcat_http_port: 8080
+tomcat_shutdown_port: 8005
+
+# --- Options de la JVM (écrites dans bin/setenv.sh) ---
+tomcat_java_opts: "-Xms256m -Xmx512m -Djava.security.egd=file:/dev/./urandom"
+
+# --- Application déployée ---
+tomcat_app_name: "app"                        # => contexte /app
+tomcat_app_title: "Lab Ansible — Application Java"
+tomcat_app_subtitle: "Pool app_tomcat derrière HAProxy"
+
+# false : déploiement « exploded » (dossier webapps/app) — recommandé en lab
+# true  : Ansible construit webapps/app.war avec la commande jar
+tomcat_package_as_war: false
+
+# Applications livrées avec Tomcat et supprimées (surface d'attaque inutile)
+tomcat_remove_default_apps:
+  - docs
+  - examples
+  - host-manager
+  - manager
+
+# Identité visuelle du serveur — surchargée par hôte dans l'inventaire
+server_badge_color: "#6b46c1"
+server_badge_label: "APP"
+site_environment: "Formation DevOps"

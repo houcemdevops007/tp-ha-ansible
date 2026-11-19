@@ -1,0 +1,120 @@
+---
+# ==========================================================
+# roles/common/tasks/main.yml
+# Socle appliqué à TOUTES les machines du lab
+# ==========================================================
+
+# ----------------------------------------------------------
+# 1. Paquets de base
+# ----------------------------------------------------------
+- name: "common | Rafraîchir le cache des paquets (Debian/Ubuntu)"
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600      # ne refait rien si le cache a moins d'1 h
+  when: ansible_os_family == 'Debian'
+  tags: [common, packages]
+
+- name: "common | Installer les paquets de base"
+  ansible.builtin.package:        # package = dnf sur Rocky, apt sur Debian
+    name: "{{ common_packages }}"
+    state: present
+  tags: [common, packages]
+
+# ----------------------------------------------------------
+# 2. Heure du système : indispensable pour des logs exploitables
+#    et pour les sessions applicatives
+# ----------------------------------------------------------
+- name: "common | Définir le fuseau horaire sur {{ lab_timezone }}"
+  community.general.timezone:
+    name: "{{ lab_timezone }}"
+  tags: [common, time]
+
+- name: "common | Déployer la configuration chrony (NTP)"
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: "{{ common_chrony_config }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true                 # garde une copie horodatée de l'ancien fichier
+  notify: Redémarrer chrony
+  tags: [common, time]
+
+- name: "common | Activer et démarrer chrony"
+  ansible.builtin.service:
+    name: "{{ common_chrony_service }}"
+    state: started
+    enabled: true
+  tags: [common, time]
+
+# ----------------------------------------------------------
+# 3. Résolution de noms interne au lab
+#    Tous les hôtes se connaissent par leur nom court et long.
+# ----------------------------------------------------------
+- name: "common | Générer /etc/hosts à partir de l'inventaire"
+  ansible.builtin.template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  when: common_manage_hosts | bool
+  tags: [common, hosts]
+
+# ----------------------------------------------------------
+# 4. SELinux (Rocky / RHEL uniquement)
+# ----------------------------------------------------------
+- name: "common | Positionner SELinux sur « {{ selinux_state }} »"
+  ansible.posix.selinux:
+    policy: targeted
+    state: "{{ selinux_state }}"
+  when:
+    - manage_selinux | bool
+    - ansible_os_family == 'RedHat'
+  register: selinux_result
+  tags: [common, selinux]
+
+- name: "common | Signaler qu'un redémarrage est nécessaire (changement SELinux)"
+  ansible.builtin.debug:
+    msg: >-
+      SELinux vient de changer d'état sur {{ inventory_hostname }}.
+      Un redémarrage de la machine est nécessaire pour que ce soit effectif.
+  when:
+    - selinux_result is defined
+    - selinux_result.reboot_required | default(false) | bool
+  tags: [common, selinux]
+
+# ----------------------------------------------------------
+# 5. Pare-feu : on démarre firewalld et on garantit l'accès SSH
+#    AVANT que les rôles suivants n'ouvrent leurs propres ports.
+# ----------------------------------------------------------
+- name: "common | Installer firewalld"
+  ansible.builtin.package:
+    name: firewalld
+    state: present
+  when:
+    - manage_firewalld | bool
+    - ansible_os_family == 'RedHat'
+  tags: [common, firewall]
+
+- name: "common | Activer et démarrer firewalld"
+  ansible.builtin.service:
+    name: firewalld
+    state: started
+    enabled: true
+  when:
+    - manage_firewalld | bool
+    - ansible_os_family == 'RedHat'
+  tags: [common, firewall]
+
+- name: "common | Autoriser SSH dans firewalld (sécurité : ne jamais se couper la branche)"
+  ansible.posix.firewalld:
+    service: ssh
+    permanent: true     # écrit dans la configuration persistante
+    immediate: true     # ET applique tout de suite, sans reload
+    state: enabled
+  when:
+    - manage_firewalld | bool
+    - ansible_os_family == 'RedHat'
+  tags: [common, firewall]

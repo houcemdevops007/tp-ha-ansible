@@ -1,0 +1,32 @@
+---
+# ==========================================================
+# roles/common/defaults/main.yml
+# ==========================================================
+
+# --- Paquets installés sur toutes les machines ---
+common_packages:
+  - vim
+  - curl
+  - wget
+  - tar
+  - bash-completion
+  - chrony
+
+# --- Temps ---
+lab_timezone: "Europe/Paris"
+ntp_servers:
+  - 0.rocky.pool.ntp.org
+  - 1.rocky.pool.ntp.org
+
+# Nom du service et chemin du fichier chrony selon la famille d'OS.
+# Jinja2 est évalué « au dernier moment » : ansible_os_family sera connu
+# au moment où la variable est réellement utilisée, après gather_facts.
+common_chrony_service: "{{ 'chronyd' if ansible_os_family == 'RedHat' else 'chrony' }}"
+common_chrony_config: "{{ '/etc/chrony.conf' if ansible_os_family == 'RedHat' else '/etc/chrony/chrony.conf' }}"
+
+# --- Options ---
+common_manage_hosts: true     # générer /etc/hosts depuis l'inventaire
+manage_firewalld: true
+manage_selinux: true
+selinux_state: enforcing      # enforcing | permissive | disabled
+lab_domain: "lab.local"

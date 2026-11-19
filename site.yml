@@ -1,0 +1,69 @@
+---
+# ==========================================================================
+# site.yml — playbook principal du lab
+#
+# ORDRE IMPORTANT : les backends sont déployés AVANT le load balancer.
+# Si HAProxy démarrait en premier, ses deux backends seraient DOWN et
+# vous chercheriez un problème qui n'existe pas.
+# ==========================================================================
+
+# --------------------------------------------------------------------------
+# Play 1 — socle commun sur les 5 machines
+# --------------------------------------------------------------------------
+- name: "Socle commun du lab"
+  hosts: lab
+  become: true
+  gather_facts: true
+  roles:
+    - role: common
+      tags: [common]
+
+# --------------------------------------------------------------------------
+# Play 2 — pool web_apache
+# --------------------------------------------------------------------------
+- name: "Pool web_apache — serveurs Apache httpd"
+  hosts: web
+  become: true
+  gather_facts: true
+  roles:
+    - role: apache
+      tags: [apache, web]
+
+# --------------------------------------------------------------------------
+# Play 3 — pool app_tomcat
+# --------------------------------------------------------------------------
+- name: "Pool app_tomcat — serveurs Tomcat"
+  hosts: app
+  become: true
+  gather_facts: true
+  roles:
+    - role: tomcat
+      tags: [tomcat, app]
+
+# --------------------------------------------------------------------------
+# Play 4 — load balancer
+# --------------------------------------------------------------------------
+- name: "Load balancer HAProxy"
+  hosts: lb
+  become: true
+  gather_facts: true
+  roles:
+    - role: haproxy
+      tags: [haproxy, lb]
+
+# --------------------------------------------------------------------------
+# Play 5 — récapitulatif affiché à la fin de l'exécution
+# --------------------------------------------------------------------------
+- name: "Récapitulatif du déploiement"
+  hosts: lb
+  become: false
+  gather_facts: false
+  tasks:
+    - name: "Adresses utiles"
+      ansible.builtin.debug:
+        msg:
+          - "Site Apache      : http://{{ ansible_host }}/"
+          - "Page À propos    : http://{{ ansible_host }}/about.html"
+          - "Application Java : http://{{ ansible_host }}/{{ app_context }}/"
+          - "Statistiques     : http://{{ ansible_host }}:{{ haproxy_stats_port }}{{ haproxy_stats_uri }}"
+          - "Identifiants     : {{ haproxy_stats_user }} / (voir group_vars/lb.yml)"
