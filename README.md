@@ -252,4 +252,4 @@ parce que plusieurs variables sont **volontairement** partagées entre rôles
 
 ## Licence
 
-Support de formation — réutilisation libre en contexte pédagogique.
+[MIT](LICENSE) — support de formation, réutilisation libre.
