@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TP Ansible — Architecture HAProxy / Apache / Tomcat</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#ffffff; --ink:#1d2433; --muted:#5b6475; --line:#e3e6ee;
+    --ansible:#e00; --lb:#2563eb; --apache:#c2410c; --tomcat:#a16207; --ok:#15803d;
+    --code:#0f172a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px 60px}
+  header{background:linear-gradient(135deg,#111827 0%,#1e293b 60%,#7f1d1d 100%);color:#fff;padding:56px 20px 48px}
+  header .wrap{padding-bottom:0}
+  .tag{display:inline-block;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);padding:4px 12px;border-radius:999px;font-size:13px;margin-right:6px}
+  h1{font-size:36px;line-height:1.2;margin:16px 0 10px}
+  header p{color:#cbd5e1;font-size:18px;max-width:720px;margin:0}
+  .meta{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
+  .meta div{background:rgba(255,255,255,.08);border-radius:10px;padding:10px 16px;font-size:14px}
+  .meta b{display:block;font-size:18px}
+  nav{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+  nav .wrap{display:flex;gap:4px;overflow-x:auto;padding:0 20px}
+  nav a{color:var(--muted);text-decoration:none;padding:14px 12px;font-size:14px;white-space:nowrap;border-bottom:2px solid transparent}
+  nav a:hover{color:var(--ink);border-bottom-color:var(--ansible)}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px;margin-top:24px}
+  h2{margin:0 0 16px;font-size:24px;display:flex;align-items:center;gap:10px}
+  h2 .num{background:var(--ink);color:#fff;border-radius:8px;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:16px}
+  h3{margin:22px 0 8px;font-size:18px}
+  ul{padding-left:22px} li{margin:4px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .box{border:1px solid var(--line);border-radius:10px;padding:16px;background:#fafbfd}
+  .box h4{margin:0 0 6px}
+  table{width:100%;border-collapse:collapse;font-size:15px}
+  th,td{border-bottom:1px solid var(--line);padding:10px 8px;text-align:left}
+  th{background:#f1f3f8;font-weight:600}
+  code{background:#eef1f6;padding:2px 6px;border-radius:5px;font-size:.92em}
+  pre{background:var(--code);color:#e2e8f0;padding:16px;border-radius:10px;overflow-x:auto;font-size:14px;line-height:1.5}
+  pre code{background:none;padding:0;color:inherit}
+  .note{border-left:4px solid var(--lb);background:#eff6ff;padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .warn{border-left:4px solid var(--ansible);background:#fef2f2;padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;color:#fff}
+  .p-lb{background:var(--lb)} .p-ap{background:var(--apache)} .p-tc{background:var(--tomcat)} .p-ok{background:var(--ok)}
+  /* Architecture */
+  .archi{display:flex;flex-direction:column;align-items:center;gap:0;margin:10px 0 4px}
+  .node{border-radius:12px;padding:12px 18px;text-align:center;color:#fff;font-weight:600;min-width:170px}
+  .node small{display:block;font-weight:400;opacity:.9;font-size:12px}
+  .client{background:#334155}
+  .lbn{background:var(--lb)}
+  .apn{background:var(--apache)}
+  .tcn{background:var(--tomcat)}
+  .arrow{width:2px;height:28px;background:#94a3b8;position:relative}
+  .arrow:after{content:"";position:absolute;bottom:-2px;left:-5px;border:6px solid transparent;border-top-color:#94a3b8}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:30px;width:100%;max-width:640px;margin-top:6px}
+  .branch{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .route{font-size:13px;color:var(--muted);background:#f1f5f9;border-radius:6px;padding:4px 10px;font-family:ui-monospace,monospace}
+  .pair{display:flex;gap:8px}
+  .pair .node{min-width:0;padding:10px 12px;font-size:14px}
+  .nobridge{margin-top:12px;font-size:13px;color:var(--ansible);font-weight:600}
+  /* Étapes */
+  .step{display:grid;grid-template-columns:44px 1fr;gap:16px;padding:18px 0;border-top:1px dashed var(--line)}
+  .step:first-of-type{border-top:none}
+  .step .n{width:44px;height:44px;border-radius:50%;background:var(--ansible);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:18px}
+  .step h3{margin:6px 0 6px}
+  .step .dur{font-size:13px;color:var(--muted)}
+  .check{list-style:none;padding-left:0}
+  .check li:before{content:"✔";color:var(--ok);font-weight:700;margin-right:8px}
+  footer{text-align:center;color:var(--muted);font-size:13px;margin-top:30px}
+  @media (max-width:600px){h1{font-size:28px}.split{grid-template-columns:1fr}.step{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="tag">Travaux pratiques</span><span class="tag">Ansible</span><span class="tag">Niveau débutant → intermédiaire</span>
+    <h1>Déployer une architecture web avec Ansible<br>HAProxy · Apache · Tomcat</h1>
+    <p>Vous allez automatiser de A à Z le déploiement d'un load balancer HAProxy qui répartit le trafic entre deux pools de serveurs indépendants : un site statique sous Apache et une application Java sous Tomcat.</p>
+    <div class="meta">
+      <div><b>6 VM</b>1 contrôleur + 5 cibles</div>
+      <div><b>4 rôles</b>common, apache, tomcat, haproxy</div>
+      <div><b>≈ 6 h</b>durée indicative</div>
+      <div><b>Rocky Linux 9</b>sur Proxmox</div>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <div class="wrap">
+    <a href="#objectifs">Objectifs</a>
+    <a href="#archi">Architecture</a>
+    <a href="#lab">Environnement</a>
+    <a href="#apps">Applications</a>
+    <a href="#etapes">Étapes</a>
+    <a href="#verif">Vérifications</a>
+    <a href="#bonus">Exercices</a>
+    <a href="#livrables">Livrables</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<section id="objectifs">
+  <h2><span class="num">1</span>Objectifs pédagogiques</h2>
+  <p>À la fin de ce TP, vous serez capable de :</p>
+  <div class="grid">
+    <div class="box"><h4>📋 Inventorier</h4>Organiser un inventaire Ansible en groupes (<code>lb</code>, <code>web</code>, <code>app</code>) avec des variables par groupe.</div>
+    <div class="box"><h4>🧩 Structurer</h4>Découper un projet en rôles réutilisables (tasks, handlers, templates, files, defaults).</div>
+    <div class="box"><h4>🧪 Générer</h4>Produire des fichiers de configuration dynamiques avec Jinja2 à partir de l'inventaire.</div>
+    <div class="box"><h4>⚖️ Répartir</h4>Configurer HAProxy avec plusieurs backends, des ACL de routage et des health checks.</div>
+    <div class="box"><h4>🔒 Sécuriser</h4>Gérer firewalld, SELinux et les secrets avec <code>ansible-vault</code>.</div>
+    <div class="box"><h4>✅ Valider</h4>Tester l'idempotence, la répartition de charge et la tolérance aux pannes.</div>
+  </div>
+</section>
+
+<section id="archi">
+  <h2><span class="num">2</span>Architecture cible</h2>
+  <div class="archi">
+    <div class="node client">👤 Client<small>navigateur / curl</small></div>
+    <div class="arrow"></div>
+    <div class="node lbn">HAProxy<small>lb01 · port 80 · stats :8404</small></div>
+    <div class="split">
+      <div class="branch">
+        <div class="arrow"></div>
+        <span class="route">/ (par défaut)</span>
+        <div class="pair">
+          <div class="node apn">web01<small>Apache :80</small></div>
+          <div class="node apn">web02<small>Apache :80</small></div>
+        </div>
+        <span class="pill p-ap">backend web_apache</span>
+      </div>
+      <div class="branch">
+        <div class="arrow"></div>
+        <span class="route">/app</span>
+        <div class="pair">
+          <div class="node tcn">app01<small>Tomcat :8080</small></div>
+          <div class="node tcn">app02<small>Tomcat :8080</small></div>
+        </div>
+        <span class="pill p-tc">backend app_tomcat</span>
+      </div>
+    </div>
+    <div class="nobridge">⚠ Aucune liaison Apache ↔ Tomcat : ce sont deux backends indépendants</div>
+  </div>
+
+  <h3>Règles de routage HAProxy</h3>
+  <table>
+    <tr><th>Requête</th><th>Backend</th><th>Algorithme</th><th>Health check</th></tr>
+    <tr><td><code>/app</code> et <code>/app/*</code></td><td><span class="pill p-tc">app_tomcat</span></td><td>roundrobin</td><td><code>GET /app/health.jsp</code></td></tr>
+    <tr><td>Tout le reste</td><td><span class="pill p-ap">web_apache</span></td><td>roundrobin</td><td><code>GET /health.html</code></td></tr>
+  </table>
+  <div class="note"><b>Variante :</b> vous pourrez aussi router par nom d'hôte : <code>www.lab.local</code> → Apache, <code>app.lab.local</code> → Tomcat.</div>
+</section>
+
+<section id="lab">
+  <h2><span class="num">3</span>Environnement de lab</h2>
+  <table>
+    <tr><th>Hôte</th><th>Groupe Ansible</th><th>Rôle</th><th>IP (exemple)</th><th>Ports</th></tr>
+    <tr><td>ansible01</td><td>—</td><td>Nœud de contrôle</td><td>192.168.10.10</td><td>22</td></tr>
+    <tr><td>lb01</td><td><code>lb</code></td><td><span class="pill p-lb">HAProxy</span></td><td>192.168.10.20</td><td>80, 8404</td></tr>
+    <tr><td>web01</td><td><code>web</code></td><td><span class="pill p-ap">Apache</span></td><td>192.168.10.31</td><td>80</td></tr>
+    <tr><td>web02</td><td><code>web</code></td><td><span class="pill p-ap">Apache</span></td><td>192.168.10.32</td><td>80</td></tr>
+    <tr><td>app01</td><td><code>app</code></td><td><span class="pill p-tc">Tomcat</span></td><td>192.168.10.41</td><td>8080</td></tr>
+    <tr><td>app02</td><td><code>app</code></td><td><span class="pill p-tc">Tomcat</span></td><td>192.168.10.42</td><td>8080</td></tr>
+  </table>
+  <div class="warn">Adaptez les adresses IP à votre propre plage. Elles ne doivent apparaître <b>que dans l'inventaire</b>, jamais en dur dans les rôles.</div>
+  <h3>Prérequis</h3>
+  <ul>
+    <li>Connaissances de base en Linux, SSH et YAML</li>
+    <li>Ansible ≥ 2.15 installé sur <code>ansible01</code></li>
+    <li>Un utilisateur avec <code>sudo</code> sur toutes les VM cibles</li>
+    <li>Accès Internet depuis les VM (dépôts de paquets)</li>
+  </ul>
+</section>
+
+<section id="apps">
+  <h2><span class="num">4</span>Applications à déployer</h2>
+  <p>Les applications sont fournies dans les rôles : aucun téléchargement externe ni compilation n'est nécessaire.</p>
+  <div class="grid">
+    <div class="box">
+      <h4><span class="pill p-ap">Apache</span> Site statique</h4>
+      <ul>
+        <li><code>index.html</code> : accueil affichant le hostname et l'IP du serveur</li>
+        <li><code>about.html</code> : présentation du TP</li>
+        <li><code>health.html</code> : page de health check</li>
+        <li><code>style.css</code> : couleur différente par serveur</li>
+      </ul>
+      <small>HTML/CSS pur, généré par des templates Jinja2.</small>
+    </div>
+    <div class="box">
+      <h4><span class="pill p-tc">Tomcat</span> Application Java <code>/app</code></h4>
+      <ul>
+        <li><code>index.jsp</code> : hostname, heure, ID de session, compteur de visites</li>
+        <li><code>health.jsp</code> : renvoie <code>OK</code></li>
+        <li><code>WEB-INF/web.xml</code> : descripteur de l'application</li>
+      </ul>
+      <small>Pages JSP compilées par Tomcat, sans Maven ni base de données.</small>
+    </div>
+  </div>
+</section>
+
+<section id="etapes">
+  <h2><span class="num">5</span>Déroulé du TP, étape par étape</h2>
+
+  <div class="step">
+    <div class="n">1</div>
+    <div>
+      <h3>Préparer le nœud de contrôle</h3>
+      <div class="dur">⏱ 20 min</div>
+      <ul>
+        <li>Générer une clé SSH et la copier sur les 5 VM cibles (<code>ssh-copy-id</code>)</li>
+        <li>Créer le répertoire du projet <code>tp-3tiers/</code> et l'initialiser avec Git</li>
+        <li>Écrire un <code>ansible.cfg</code> local : inventaire par défaut, <code>remote_user</code>, <code>become</code></li>
+      </ul>
+<pre><code>ssh-keygen -t ed25519
+for h in lb01 web01 web02 app01 app02; do ssh-copy-id $h; done</code></pre>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">2</div>
+    <div>
+      <h3>Construire l'inventaire</h3>
+      <div class="dur">⏱ 20 min</div>
+      <ul>
+        <li>Déclarer les groupes <code>lb</code>, <code>web</code> et <code>app</code> dans <code>inventory/hosts.ini</code></li>
+        <li>Créer <code>group_vars/</code> : ports, versions, nom des backends</li>
+        <li>Tester la connectivité :</li>
+      </ul>
+<pre><code>ansible all -m ping
+ansible-inventory --graph</code></pre>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">3</div>
+    <div>
+      <h3>Créer la structure des rôles</h3>
+      <div class="dur">⏱ 15 min</div>
+<pre><code>ansible-galaxy init roles/common
+ansible-galaxy init roles/apache
+ansible-galaxy init roles/tomcat
+ansible-galaxy init roles/haproxy</code></pre>
+      <p>Repérer le rôle de chaque dossier : <code>tasks</code>, <code>handlers</code>, <code>templates</code>, <code>files</code>, <code>defaults</code>, <code>vars</code>.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">4</div>
+    <div>
+      <h3>Rôle <code>common</code></h3>
+      <div class="dur">⏱ 30 min</div>
+      <ul>
+        <li>Installer les paquets de base (<code>vim</code>, <code>curl</code>, <code>chrony</code>…)</li>
+        <li>Démarrer et activer <code>firewalld</code> et <code>chronyd</code></li>
+        <li>Vérifier que SELinux est en mode <code>enforcing</code> (on ne le désactive pas !)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">5</div>
+    <div>
+      <h3>Rôle <code>apache</code> : site statique</h3>
+      <div class="dur">⏱ 45 min</div>
+      <ul>
+        <li>Installer <code>httpd</code>, démarrer et activer le service</li>
+        <li>Déployer les pages avec le module <code>template</code> (variables <code>ansible_hostname</code>, <code>ansible_default_ipv4.address</code>)</li>
+        <li>Copier <code>style.css</code> avec le module <code>copy</code></li>
+        <li>Ouvrir le service <code>http</code> dans firewalld</li>
+        <li>Déclarer un handler <code>restart httpd</code></li>
+      </ul>
+      <div class="note">Test intermédiaire : <code>curl http://web01/</code> doit afficher le nom <b>web01</b>.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">6</div>
+    <div>
+      <h3>Rôle <code>tomcat</code> : application Java</h3>
+      <div class="dur">⏱ 60 min</div>
+      <ul>
+        <li>Installer Java (OpenJDK 17)</li>
+        <li>Créer l'utilisateur système <code>tomcat</code>, télécharger et décompresser Tomcat dans <code>/opt/tomcat</code></li>
+        <li>Créer le service <code>systemd</code> à partir d'un template</li>
+        <li>Déployer l'application dans <code>webapps/app/</code> (JSP + <code>WEB-INF/web.xml</code>)</li>
+        <li>Ouvrir le port <code>8080/tcp</code> et déclarer un handler <code>restart tomcat</code></li>
+      </ul>
+      <div class="note">Test intermédiaire : <code>curl http://app01:8080/app/</code> doit afficher <b>app01</b>.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">7</div>
+    <div>
+      <h3>Rôle <code>haproxy</code> : le load balancer</h3>
+      <div class="dur">⏱ 60 min</div>
+      <ul>
+        <li>Installer <code>haproxy</code></li>
+        <li>Écrire le template <code>haproxy.cfg.j2</code> :
+          <ul>
+            <li>frontend sur le port 80 avec l'ACL <code>path_beg /app</code></li>
+            <li>backend <code>web_apache</code> et backend <code>app_tomcat</code> générés par une boucle sur <code>groups['web']</code> et <code>groups['app']</code></li>
+            <li><code>option httpchk</code> sur chaque backend</li>
+            <li>page de stats sur le port 8404, avec un mot de passe stocké dans un vault</li>
+          </ul>
+        </li>
+        <li>Valider la configuration avant de l'appliquer : <code>validate: haproxy -c -f %s</code></li>
+        <li>Activer le booléen SELinux <code>haproxy_connect_any</code> et ouvrir les ports 80 et 8404</li>
+      </ul>
+<pre><code>{% for host in groups['web'] %}
+    server {{ host }} {{ hostvars[host].ansible_host }}:80 check
+{% endfor %}</code></pre>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="n">8</div>
+    <div>
+      <h3>Playbook principal et déploiement</h3>
+      <div class="dur">⏱ 30 min</div>
+      <ul>
+        <li>Écrire <code>site.yml</code> : un play par groupe (<code>common</code> sur tous, puis <code>web</code>, <code>app</code> et <code>lb</code> en dernier)</li>
+        <li>Faire un test à blanc, puis le déploiement réel :</li>
+      </ul>
+<pre><code>ansible-playbook site.yml --check --diff
+ansible-playbook site.yml --ask-vault-pass</code></pre>
+      <div class="note"><b>Idempotence :</b> relancez le playbook. Le récapitulatif doit afficher <code>changed=0</code> pour tous les hôtes.</div>
+    </div>
+  </div>
+</section>
+
+<section id="verif">
+  <h2><span class="num">6</span>Vérifications et tests</h2>
+  <ul class="check">
+    <li>Répartition sur Apache : les réponses alternent entre web01 et web02</li>
+    <li>Répartition sur Tomcat : les réponses alternent entre app01 et app02</li>
+    <li>Page de stats <code>http://lb01:8404/stats</code> : les 4 serveurs sont <span class="pill p-ok">UP</span></li>
+    <li>Tolérance aux pannes : après l'arrêt de <code>httpd</code> sur web01, tout le trafic passe sur web02</li>
+    <li>Même test sur Tomcat avec app01</li>
+  </ul>
+<pre><code>for i in {1..6}; do curl -s http://lb01/ | grep -o 'web0[12]'; done
+for i in {1..6}; do curl -s http://lb01/app/ | grep -o 'app0[12]'; done
+
+ansible web01 -b -m service -a "name=httpd state=stopped"</code></pre>
+  <h3>Dépannage rapide</h3>
+  <table>
+    <tr><th>Symptôme</th><th>Piste</th></tr>
+    <tr><td>Backend <code>DOWN</code> dans les stats</td><td>Le chemin du health check existe-t-il ? Testez-le avec <code>curl</code> depuis lb01</td></tr>
+    <tr><td><code>503 Service Unavailable</code></td><td>SELinux : <code>getsebool haproxy_connect_any</code>, <code>ausearch -m avc</code></td></tr>
+    <tr><td>Connexion refusée</td><td>firewalld : <code>firewall-cmd --list-all</code> sur le serveur cible</td></tr>
+    <tr><td><code>/app</code> renvoie 404</td><td>Dossier <code>webapps/app</code>, droits de l'utilisateur <code>tomcat</code>, <code>logs/catalina.out</code></td></tr>
+    <tr><td>HAProxy ne redémarre pas</td><td><code>haproxy -c -f /etc/haproxy/haproxy.cfg</code></td></tr>
+  </table>
+</section>
+
+<section id="bonus">
+  <h2><span class="num">7</span>Exercices complémentaires</h2>
+  <div class="grid">
+    <div class="box"><span class="pill p-ok">Facile</span><h4>Scale-out</h4>Ajoutez un serveur <code>app03</code> <b>uniquement dans l'inventaire</b>, relancez le playbook et vérifiez qu'il apparaît dans HAProxy.</div>
+    <div class="box"><span class="pill p-lb">Moyen</span><h4>Déploiement ciblé</h4>Modifiez le site, puis redéployez seulement le rôle Apache avec un tag (<code>--tags apache</code>) et <code>--limit</code>.</div>
+    <div class="box"><span class="pill p-tc">Moyen</span><h4>Sticky session</h4>Le compteur de visites repart à zéro ? Activez l'affinité de session par cookie sur le backend Tomcat.</div>
+    <div class="box"><span class="pill p-ap">Avancé</span><h4>HTTPS</h4>Générez un certificat auto-signé avec Ansible et activez la terminaison TLS sur HAProxy (redirection 80 → 443).</div>
+  </div>
+</section>
+
+<section id="livrables">
+  <h2><span class="num">8</span>Livrables et évaluation</h2>
+  <table>
+    <tr><th>Livrable</th><th>Critère</th><th>Points</th></tr>
+    <tr><td>Dépôt Git du projet</td><td>Structure en rôles, aucune IP en dur, <code>ansible-lint</code> sans erreur</td><td>5</td></tr>
+    <tr><td>Déploiement fonctionnel</td><td><code>/</code> et <code>/app</code> accessibles via HAProxy</td><td>5</td></tr>
+    <tr><td>Idempotence</td><td>Une deuxième exécution donne <code>changed=0</code></td><td>3</td></tr>
+    <tr><td>Tests de bascule</td><td>Captures de la page de stats et des <code>curl</code></td><td>3</td></tr>
+    <tr><td>Sécurité</td><td>SELinux actif, firewall configuré, secrets dans un vault</td><td>2</td></tr>
+    <tr><td>Exercices complémentaires</td><td>Au moins 2 réalisés</td><td>2</td></tr>
+    <tr><th colspan="2">Total</th><th>20</th></tr>
+  </table>
+</section>
+
+<footer>EFIlearn · TP Ansible : architecture HAProxy / Apache / Tomcat</footer>
+</div>
+</body>
+</html>
